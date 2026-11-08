@@ -1,0 +1,35 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: edgesentinel-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - WABRIDGE_URL=${WABRIDGE_URL:-http://host.docker.internal:8088}
+      - ALERT_WHATSAPP_NUMBER=${ALERT_WHATSAPP_NUMBER:-}
+      - CONFIDENCE_THRESHOLD=0.45
+      - DEFAULT_DETECTION_FPS=5.0
+    volumes:
+      - ./backend/data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: edgesentinel-frontend
+    restart: unless-stopped
+    ports:
+      - "3080:80"
+    depends_on:
+      - backend
+
+networks:
+  default:
+    name: edgesentinel-network
