@@ -35,6 +35,8 @@ class ActiveCameraWorker:
         self.frame_counter = 0
         self.task: asyncio.Task | None = None
         self.cap: cv2.VideoCapture | None = None
+        self.last_real_frame: np.ndarray | None = None
+        self.consecutive_read_failures = 0
         self.last_event_time = 0.0
 
     async def start(self):
@@ -84,11 +86,27 @@ class ActiveCameraWorker:
                 frame: np.ndarray | None = None
                 if not is_demo and self.cap and self.cap.isOpened():
                     ret, captured = self.cap.read()
-                    if ret and captured is not None:
+                    if ret and captured is not None and captured.size > 0:
+                        self.last_real_frame = captured
                         frame = captured
+                        self.consecutive_read_failures = 0
                     else:
-                        # Temporary read drop, generate synthetic fallback frame
-                        frame = generate_synthetic_cctv_frame(self.name, self.frame_counter)
+                        self.consecutive_read_failures += 1
+                        if self.last_real_frame is not None:
+                            # Keep displaying real CCTV frame smoothly, NEVER flicker to synthetic cartoon!
+                            frame = self.last_real_frame
+                        else:
+                            frame = generate_synthetic_cctv_frame(self.name, self.frame_counter)
+
+                        # Reconnect if stream stalled for > 10 seconds (~50 attempts at 5fps)
+                        if self.consecutive_read_failures >= 50:
+                            logger.warning(f"RTSP stream buffer stalled on '{self.name}'. Reconnecting to RTSP...")
+                            try:
+                                self.cap.release()
+                                self.cap = cv2.VideoCapture(self.stream_url, cv2.CAP_FFMPEG)
+                            except Exception as rec_err:
+                                logger.error(f"Reconnect error on '{self.name}': {rec_err}")
+                            self.consecutive_read_failures = 0
                 else:
                     frame = generate_synthetic_cctv_frame(self.name, self.frame_counter)
 
