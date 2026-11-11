@@ -3,28 +3,34 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from './lib/api'
 import { playSecuritySirenAlert } from './lib/sound'
 import type { Camera, AlertRule } from './types'
-import { Navbar } from './components/Navbar'
-import { CameraCard } from './components/CameraCard'
-import { EventsView } from './components/EventsView'
-import { RulesView } from './components/RulesView'
-import { CamerasView } from './components/CamerasView'
-import { CameraModal } from './components/CameraModal'
-import { RuleModal } from './components/RuleModal'
-import { LayoutGrid, Grid2X2, Square, Shield } from 'lucide-react'
+
+// Layout & Reusable components
+import { Header } from './components/layout/Header'
+import { MobileNav } from './components/layout/MobileNav'
+
+// Views & Modals
+import { CameraGrid } from './components/cameras/CameraGrid'
+import { CamerasListView } from './components/cameras/CamerasListView'
+import { CameraModal } from './components/cameras/modal/CameraModal'
+import { EventsView } from './components/events/EventsView'
+import { RulesView } from './components/rules/RulesView'
+import { RuleModal } from './components/rules/RuleModal'
 
 export default function App() {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'grid' | 'events' | 'rules' | 'cameras'>('grid')
-  const [gridColumns, setGridColumns] = useState<1 | 2 | 3>(2)
 
   // Modals state
   const [cameraModalOpen, setCameraModalOpen] = useState(false)
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null)
-
   const [ruleModalOpen, setRuleModalOpen] = useState(false)
   const [selectedRule, setSelectedRule] = useState<AlertRule | null>(null)
 
-  // Queries
+  // Web Audio Siren Alert
+  const [soundEnabled, setSoundEnabled] = useState(false)
+  const prevEventsCount = useRef(0)
+
+  // ── Queries ──────────────────────────────────────────────────────────────
   const { data: stats } = useQuery({
     queryKey: ['system-stats'],
     queryFn: api.getStats,
@@ -54,17 +60,7 @@ export default function App() {
     refetchInterval: 10000,
   })
 
-  const setArmingMutation = useMutation({
-    mutationFn: api.setArmingMode,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['arming-mode'] })
-    },
-  })
-
-  // Web Audio Siren Alert on incoming events
-  const [soundEnabled, setSoundEnabled] = useState(false)
-  const prevEventsCount = useRef(events.length)
-
+  // Trigger siren alert on new incoming event if sound enabled
   useEffect(() => {
     if (events.length > prevEventsCount.current && prevEventsCount.current > 0) {
       if (soundEnabled && armingData?.mode !== 'disarmed') {
@@ -74,7 +70,14 @@ export default function App() {
     prevEventsCount.current = events.length
   }, [events.length, soundEnabled, armingData?.mode])
 
-  // Mutations
+  // ── Mutations ────────────────────────────────────────────────────────────
+  const setArmingMutation = useMutation({
+    mutationFn: api.setArmingMode,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['arming-mode'] })
+    },
+  })
+
   const saveCameraMutation = useMutation({
     mutationFn: (data: Partial<Camera>) => {
       if (selectedCamera) {
@@ -154,8 +157,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col">
-      <Navbar
+    <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col pb-20 md:pb-6 selection:bg-cyan-500/30 selection:text-cyan-200">
+      {/* Top Command Bar */}
+      <Header
         stats={stats || null}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
@@ -171,98 +175,19 @@ export default function App() {
         onToggleSound={() => setSoundEnabled(!soundEnabled)}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6">
-        {/* Tab 1: Live CCTV Grid View */}
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
         {activeTab === 'grid' && (
-          <div className="space-y-4">
-            {/* Grid Controls Bar */}
-            <div className="flex items-center justify-between rounded-2xl border border-slate-800/80 bg-slate-900/60 px-4 py-2.5 backdrop-blur-md">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-xs font-semibold text-slate-200">
-                  Monitoring {cameras.filter((c) => c.is_active).length} Kamera Aktif
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-slate-400 hidden sm:inline">Layout Tampilan:</span>
-                <div className="flex rounded-xl border border-slate-800 bg-slate-950 p-1">
-                  <button
-                    onClick={() => setGridColumns(1)}
-                    title="1 Kolom"
-                    className={`rounded-lg p-1.5 transition-colors ${
-                      gridColumns === 1 ? 'bg-slate-800 text-cyan-400' : 'text-slate-500 hover:text-slate-300'
-                    }`}
-                  >
-                    <Square className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => setGridColumns(2)}
-                    title="2 Kolom (Default)"
-                    className={`rounded-lg p-1.5 transition-colors ${
-                      gridColumns === 2 ? 'bg-slate-800 text-cyan-400' : 'text-slate-500 hover:text-slate-300'
-                    }`}
-                  >
-                    <Grid2X2 className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => setGridColumns(3)}
-                    title="3 Kolom"
-                    className={`rounded-lg p-1.5 transition-colors ${
-                      gridColumns === 3 ? 'bg-slate-800 text-cyan-400' : 'text-slate-500 hover:text-slate-300'
-                    }`}
-                  >
-                    <LayoutGrid className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Cameras Grid */}
-            {cameras.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 py-20 text-center">
-                <Shield className="h-12 w-12 text-slate-600 mb-3" />
-                <h3 className="text-sm font-semibold text-slate-200">Belum Ada Saluran Kamera</h3>
-                <p className="text-xs text-slate-500 mt-1 max-w-sm mb-4">
-                  Hubungkan RTSP IP camera, webcam USB, atau gunakan simulator demo untuk mulai memantau.
-                </p>
-                <button
-                  onClick={() => {
-                    setSelectedCamera(null)
-                    setCameraModalOpen(true)
-                  }}
-                  className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition-colors"
-                >
-                  + Tambah Kamera
-                </button>
-              </div>
-            ) : (
-              <div
-                className={`grid gap-4 ${
-                  gridColumns === 1
-                    ? 'grid-cols-1'
-                    : gridColumns === 2
-                    ? 'grid-cols-1 md:grid-cols-2'
-                    : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
-                }`}
-              >
-                {cameras.map((cam) => (
-                  <CameraCard
-                    key={cam.id}
-                    camera={cam}
-                    onEdit={(c) => {
-                      setSelectedCamera(c)
-                      setCameraModalOpen(true)
-                    }}
-                    onToggleDetection={(c) => toggleCameraDetectionMutation.mutate(c)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          <CameraGrid
+            cameras={cameras}
+            onEditCamera={(cam) => {
+              setSelectedCamera(cam)
+              setCameraModalOpen(true)
+            }}
+            onToggleDetection={(cam) => toggleCameraDetectionMutation.mutate(cam)}
+          />
         )}
 
-        {/* Tab 2: Security Events Gallery */}
         {activeTab === 'events' && (
           <EventsView
             events={events}
@@ -271,7 +196,6 @@ export default function App() {
           />
         )}
 
-        {/* Tab 3: WhatsApp Alert Rules */}
         {activeTab === 'rules' && (
           <RulesView
             rules={rules}
@@ -279,34 +203,37 @@ export default function App() {
               setSelectedRule(null)
               setRuleModalOpen(true)
             }}
-            onEditRule={(r) => {
-              setSelectedRule(r)
+            onEditRule={(rule) => {
+              setSelectedRule(rule)
               setRuleModalOpen(true)
             }}
             onDeleteRule={(id) => deleteRuleMutation.mutate(id)}
-            onToggleActive={(r) => toggleRuleActiveMutation.mutate(r)}
+            onToggleActive={(rule) => toggleRuleActiveMutation.mutate(rule)}
           />
         )}
 
-        {/* Tab 4: Cameras Management */}
         {activeTab === 'cameras' && (
-          <CamerasView
+          <CamerasListView
             cameras={cameras}
-            onAddCamera={() => {
-              setSelectedCamera(null)
-              setCameraModalOpen(true)
-            }}
-            onEditCamera={(c) => {
-              setSelectedCamera(c)
+            onEditCamera={(cam) => {
+              setSelectedCamera(cam)
               setCameraModalOpen(true)
             }}
             onDeleteCamera={(id) => deleteCameraMutation.mutate(id)}
-            onToggleActive={(c) => toggleCameraActiveMutation.mutate(c)}
+            onToggleActive={(cam) => toggleCameraActiveMutation.mutate(cam)}
           />
         )}
       </main>
 
-      {/* Camera Add/Edit Modal */}
+      {/* Bottom Navigation for Mobile / Handheld devices */}
+      <MobileNav
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        armingMode={armingData?.mode || 'always'}
+        onChangeArmingMode={(mode) => setArmingMutation.mutate(mode)}
+      />
+
+      {/* Modals */}
       <CameraModal
         isOpen={cameraModalOpen}
         onClose={() => setCameraModalOpen(false)}
@@ -316,12 +243,10 @@ export default function App() {
         }}
       />
 
-      {/* Rule Add/Edit Modal */}
       <RuleModal
         isOpen={ruleModalOpen}
         onClose={() => setRuleModalOpen(false)}
         initialData={selectedRule}
-        cameras={cameras}
         onSave={async (data) => {
           await saveRuleMutation.mutateAsync(data)
         }}
