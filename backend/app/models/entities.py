@@ -24,6 +24,7 @@ class Camera(Base):
     error_message: Mapped[str | None] = mapped_column(String(255), nullable=True)
     resolution: Mapped[str | None] = mapped_column(String(30), nullable=True)
     roi_polygon_json: Mapped[str | None] = mapped_column(Text, nullable=True)  # "[[x1,y1],[x2,y2],...]" normalized
+    exclusion_zones_json: Mapped[str | None] = mapped_column(Text, nullable=True)  # "[[[x1,y1],[x2,y2],...], ...]" normalized exclusion masks
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 

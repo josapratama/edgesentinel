@@ -1,0 +1,20 @@
+{
+  "name": "EdgeSentinel AI NVR",
+  "short_name": "EdgeSentinel",
+  "description": "Raspberry Pi Vision NVR & WhatsApp Security Hub",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#070b14",
+  "theme_color": "#070b14",
+  "categories": ["security", "utilities"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

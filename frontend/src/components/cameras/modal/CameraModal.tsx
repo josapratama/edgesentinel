@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { X, Video, Search, PenTool } from 'lucide-react'
+import { X, Video, Search, PenTool, EyeOff } from 'lucide-react'
 import type { Camera } from '../../../types'
 import { CameraFormTab } from './CameraFormTab'
 import { CameraTripwireTab } from './CameraTripwireTab'
+import { CameraZonesTab } from './CameraZonesTab'
 import { CameraScannerTab } from './CameraScannerTab'
 
 interface CameraModalProps {
@@ -13,13 +14,14 @@ interface CameraModalProps {
 }
 
 export function CameraModal({ isOpen, onClose, onSave, initialData }: CameraModalProps) {
-  const [activeTab, setActiveTab] = useState<'form' | 'tripwire' | 'scanner'>('form')
+  const [activeTab, setActiveTab] = useState<'form' | 'tripwire' | 'zones' | 'scanner'>('form')
   const [name, setName] = useState('')
   const [location, setLocation] = useState('')
   const [streamUrl, setStreamUrl] = useState('')
   const [fpsLimit, setFpsLimit] = useState(5.0)
   const [detectionEnabled, setDetectionEnabled] = useState(true)
   const [roiPolygonJson, setRoiPolygonJson] = useState('')
+  const [exclusionZonesJson, setExclusionZonesJson] = useState('')
   const [drawnPoints, setDrawnPoints] = useState<Array<[number, number]>>([])
   const [saving, setSaving] = useState(false)
 
@@ -31,6 +33,7 @@ export function CameraModal({ isOpen, onClose, onSave, initialData }: CameraModa
       setFpsLimit(initialData.fps_limit)
       setDetectionEnabled(initialData.detection_enabled)
       setRoiPolygonJson(initialData.roi_polygon_json || '')
+      setExclusionZonesJson(initialData.exclusion_zones_json || '')
       try {
         if (initialData.roi_polygon_json) {
           setDrawnPoints(JSON.parse(initialData.roi_polygon_json))
@@ -47,6 +50,7 @@ export function CameraModal({ isOpen, onClose, onSave, initialData }: CameraModa
       setFpsLimit(5.0)
       setDetectionEnabled(true)
       setRoiPolygonJson('')
+      setExclusionZonesJson('')
       setDrawnPoints([])
     }
     setActiveTab('form')
@@ -76,6 +80,7 @@ export function CameraModal({ isOpen, onClose, onSave, initialData }: CameraModa
         fps_limit: Number(fpsLimit),
         detection_enabled: detectionEnabled,
         roi_polygon_json: roiPolygonJson.trim() || null,
+        exclusion_zones_json: exclusionZonesJson.trim() || null,
       })
       onClose()
     } finally {
@@ -108,34 +113,46 @@ export function CameraModal({ isOpen, onClose, onSave, initialData }: CameraModa
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center gap-1.5 my-4 bg-slate-950/90 p-1 rounded-2xl border border-slate-800 text-xs font-semibold">
+        <div className="flex items-center gap-1 my-3.5 bg-slate-950/90 p-1 rounded-2xl border border-slate-800 text-xs font-semibold overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveTab('form')}
-            className={`flex-1 py-1.5 rounded-xl transition-all ${
+            className={`px-3 py-1.5 rounded-xl transition-all ${
               activeTab === 'form'
                 ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            Form Saluran
+            Parameter
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('tripwire')}
-            className={`flex-1 py-1.5 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
               activeTab === 'tripwire'
                 ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             <PenTool className="h-3 w-3" />
-            <span>Gambar Zona ROI</span>
+            <span>Tripwire ROI</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('zones')}
+            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
+              activeTab === 'zones'
+                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <EyeOff className="h-3 w-3" />
+            <span>Area Abaikan</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('scanner')}
-            className={`flex-1 py-1.5 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
               activeTab === 'scanner'
                 ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
@@ -175,6 +192,15 @@ export function CameraModal({ isOpen, onClose, onSave, initialData }: CameraModa
             drawnPoints={drawnPoints}
             setDrawnPoints={setDrawnPoints}
             setRoiPolygonJson={setRoiPolygonJson}
+            onDone={() => setActiveTab('form')}
+          />
+        )}
+
+        {activeTab === 'zones' && (
+          <CameraZonesTab
+            initialData={initialData}
+            exclusionZonesJson={exclusionZonesJson}
+            setExclusionZonesJson={setExclusionZonesJson}
             onDone={() => setActiveTab('form')}
           />
         )}

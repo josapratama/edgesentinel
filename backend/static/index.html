@@ -1,14 +1,28 @@
 <!doctype html>
-<html lang="en">
+<html lang="id">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
-    <script type="module" crossorigin src="/assets/index-DZQSWQ_K.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-Ch9cPU61.css">
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#070b14" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="EdgeSentinel" />
+    <meta name="description" content="Raspberry Pi AI Vision NVR & WhatsApp Security Hub" />
+    <title>EdgeSentinel — AI NVR & Smart Security</title>
+    <script type="module" crossorigin src="/assets/index-BSK0U8uC.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-djmvMdx1.css">
   </head>
-  <body>
+  <body class="bg-[#070b14] text-slate-100 overflow-x-hidden antialiased">
     <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
   </body>
 </html>

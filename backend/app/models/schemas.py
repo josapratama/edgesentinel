@@ -11,6 +11,7 @@ class CameraCreate(BaseModel):
     detection_enabled: bool = True
     fps_limit: float = Field(default=5.0, ge=1.0, le=30.0)
     roi_polygon_json: str | None = None
+    exclusion_zones_json: str | None = None
 
 
 class CameraUpdate(BaseModel):
@@ -21,6 +22,7 @@ class CameraUpdate(BaseModel):
     detection_enabled: bool | None = None
     fps_limit: float | None = None
     roi_polygon_json: str | None = None
+    exclusion_zones_json: str | None = None
 
 
 class CameraResponse(BaseModel):
@@ -36,6 +38,7 @@ class CameraResponse(BaseModel):
     error_message: str | None = None
     resolution: str | None = None
     roi_polygon_json: str | None = None
+    exclusion_zones_json: str | None = None
     created_at: datetime
     updated_at: datetime
 

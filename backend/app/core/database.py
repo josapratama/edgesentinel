@@ -39,6 +39,7 @@ async def init_db():
             ("cameras", "error_message", "TEXT"),
             ("cameras", "resolution", "VARCHAR(30)"),
             ("cameras", "roi_polygon_json", "TEXT"),
+            ("cameras", "exclusion_zones_json", "TEXT"),
             ("security_events", "video_filename", "VARCHAR(255)"),
             ("security_events", "video_url", "VARCHAR(500)"),
             ("security_events", "is_loitering", "BOOLEAN DEFAULT 0"),

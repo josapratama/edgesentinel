@@ -10,6 +10,7 @@ from app.core.config import settings, SNAPSHOTS_DIR, RECORDINGS_DIR
 from app.core.database import init_db
 from app.services.camera_manager import camera_manager
 from app.services.storage_cleaner import storage_cleaner
+from app.services.alert_service import alert_service
 from app.api import cameras, events, rules, streams, system, whatsapp_bot
 
 logging.basicConfig(
@@ -26,6 +27,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting camera stream workers...")
     await camera_manager.initialize_all()
     storage_cleaner.start()
+    alert_service.start_scheduler()
     logger.info(f"EdgeSentinel AI NVR ready on {settings.HOST}:{settings.PORT}")
     yield
     logger.info("Shutting down camera stream workers...")

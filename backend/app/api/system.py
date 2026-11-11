@@ -85,3 +85,39 @@ async def scan_cameras(payload: ScanRequestPayload | None = None):
         "devices_found": len(devices),
         "devices": devices
     }
+
+
+class SirenTriggerPayload(BaseModel):
+    duration: float = 10.0
+
+
+@router.get("/siren/status")
+async def get_siren_status():
+    from app.services.siren_service import siren_service
+    return siren_service.get_status()
+
+
+@router.post("/siren/trigger")
+async def trigger_physical_siren(payload: SirenTriggerPayload | None = None):
+    from app.services.siren_service import siren_service
+    duration = payload.duration if payload else 10.0
+    success = await siren_service.trigger(duration_seconds=duration)
+    return {
+        "success": success,
+        "duration": duration,
+        "message": f"Sirine audio di lokasi dibunyikan selama {duration} detik!"
+    }
+
+
+@router.post("/siren/stop")
+async def stop_physical_siren():
+    from app.services.siren_service import siren_service
+    await siren_service.stop()
+    return {"success": True, "message": "Sirine audio dihentikan."}
+
+
+@router.post("/telegram/test")
+async def test_telegram_connection():
+    from app.services.telegram_service import telegram_service
+    success, msg = await telegram_service.test_connection()
+    return {"success": success, "message": msg}

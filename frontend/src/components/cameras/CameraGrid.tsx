@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Grid2X2, Square, LayoutGrid, Radio, Cpu, HardDrive, RefreshCw } from 'lucide-react'
+import { Grid2X2, Square, LayoutGrid, Radio, Cpu, HardDrive, RefreshCw, Siren } from 'lucide-react'
 import type { Camera, SystemStats } from '../../types'
 import { formatUptime } from '../../lib/utils'
+import { api } from '../../lib/api'
 import { CameraCard } from './CameraCard'
 
 interface CameraGridProps {
@@ -22,8 +23,22 @@ export function CameraGrid({
   isRefreshing,
 }: CameraGridProps) {
   const [columns, setColumns] = useState<1 | 2 | 3>(2)
+  const [sirenPlaying, setSirenPlaying] = useState(false)
 
   const activeCount = cameras.filter((c) => c.is_active).length
+
+  const handleToggleSiren = async () => {
+    if (sirenPlaying) {
+      await api.stopSiren()
+      setSirenPlaying(false)
+    } else {
+      if (window.confirm('Bunyikan sirine darurat di speaker rumah selama 10 detik untuk menakuti penyusup?')) {
+        await api.triggerSiren(10)
+        setSirenPlaying(true)
+        setTimeout(() => setSirenPlaying(false), 10000)
+      }
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -58,6 +73,20 @@ export function CameraGrid({
 
         {/* Right: Refresh & Column layout switcher */}
         <div className="flex items-center gap-2">
+          {/* Physical Siren Trigger Button */}
+          <button
+            onClick={handleToggleSiren}
+            title={sirenPlaying ? 'Hentikan Sirine Fisik' : 'Bunyikan Sirine Fisik di Rumah'}
+            className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs font-bold transition-all ${
+              sirenPlaying
+                ? 'border-rose-500 bg-rose-600 text-white animate-pulse shadow-lg shadow-rose-950/60'
+                : 'border-slate-800 bg-slate-950/80 text-rose-400 hover:border-rose-700/60 hover:bg-rose-950/40'
+            }`}
+          >
+            <Siren className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{sirenPlaying ? 'Stop Sirine' : 'Sirine Speaker'}</span>
+          </button>
+
           {onRefresh && (
             <button
               onClick={onRefresh}

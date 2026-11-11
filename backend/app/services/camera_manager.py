@@ -58,6 +58,15 @@ class ActiveCameraWorker:
             except Exception:
                 self.roi_polygon = None
 
+        # Parse Exclusion Zones (Privacy / Ignore Mask)
+        self.exclusion_zones = None
+        ex_raw = camera_data.get("exclusion_zones_json")
+        if ex_raw:
+            try:
+                self.exclusion_zones = json.loads(ex_raw)
+            except Exception:
+                self.exclusion_zones = None
+
         self.is_running = False
         self.latest_frame: np.ndarray | None = None
         self.latest_detections: list[DetectionResult] = []
@@ -187,7 +196,8 @@ class ActiveCameraWorker:
                         frame,
                         self.id,
                         threshold=settings.CONFIDENCE_THRESHOLD,
-                        roi_polygon=self.roi_polygon
+                        roi_polygon=self.roi_polygon,
+                        exclusion_zones=self.exclusion_zones
                     )
                     self.latest_detections = detections
 
@@ -208,7 +218,8 @@ class ActiveCameraWorker:
                     detections,
                     self.name,
                     self.current_fps,
-                    roi_polygon=self.roi_polygon
+                    roi_polygon=self.roi_polygon,
+                    exclusion_zones=self.exclusion_zones
                 )
                 self.latest_frame = annotated
 
@@ -380,7 +391,9 @@ class CameraManager:
             "location": camera.location,
             "stream_url": camera.stream_url,
             "fps_limit": camera.fps_limit,
-            "detection_enabled": camera.detection_enabled
+            "detection_enabled": camera.detection_enabled,
+            "roi_polygon_json": camera.roi_polygon_json,
+            "exclusion_zones_json": camera.exclusion_zones_json,
         })
         self.workers[camera.id] = worker
         await worker.start()

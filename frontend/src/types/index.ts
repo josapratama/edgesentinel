@@ -19,6 +19,7 @@ export interface Camera {
   error_message?: string | null
   resolution?: string | null
   roi_polygon_json?: string | null
+  exclusion_zones_json?: string | null
   created_at: string
   updated_at: string
 }

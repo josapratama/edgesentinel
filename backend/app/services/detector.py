@@ -93,7 +93,8 @@ class EdgeDetector:
         frame: np.ndarray,
         camera_id: str,
         threshold: float = 0.45,
-        roi_polygon: list[list[float]] | None = None
+        roi_polygon: list[list[float]] | None = None,
+        exclusion_zones: list[list[list[float]]] | None = None
     ) -> list[DetectionResult]:
         now = time.time()
         results: list[DetectionResult] = []
@@ -105,8 +106,35 @@ class EdgeDetector:
             # 2. Advanced Heuristic Detection with False-Alarm Suppression
             results = self._detect_heuristic(frame, camera_id, threshold)
 
-        # 3. Filter by ROI Polygon (Virtual Tripwire)
         h, w = frame.shape[:2]
+
+        # 3. Filter out Exclusion Zones (Ignored / Masked areas like trees, streets, clothesline)
+        if exclusion_zones:
+            valid_results: list[DetectionResult] = []
+            for det in results:
+                x1, y1, x2, y2 = det.bbox
+                cx = (x1 + x2) / 2.0
+                cy = (y1 + y2) / 2.0
+                is_ignored = False
+                for zone in exclusion_zones:
+                    if len(zone) >= 3:
+                        poly_pts = np.array([[int(p[0] * w), int(p[1] * h)] for p in zone], dtype=np.int32)
+                        if cv2.pointPolygonTest(poly_pts, (float(cx), float(cy)), False) >= 0:
+                            is_ignored = True
+                            break
+                    elif len(zone) == 2:
+                        zx1 = int(min(zone[0][0], zone[1][0]) * w)
+                        zx2 = int(max(zone[0][0], zone[1][0]) * w)
+                        zy1 = int(min(zone[0][1], zone[1][1]) * h)
+                        zy2 = int(max(zone[0][1], zone[1][1]) * h)
+                        if zx1 <= cx <= zx2 and zy1 <= cy <= zy2:
+                            is_ignored = True
+                            break
+                if not is_ignored:
+                    valid_results.append(det)
+            results = valid_results
+
+        # 4. Filter by ROI Polygon (Virtual Tripwire)
         filtered: list[DetectionResult] = []
         for det in results:
             x1, y1, x2, y2 = det.bbox
@@ -121,7 +149,7 @@ class EdgeDetector:
 
             filtered.append(det)
 
-        # 4. Loitering Detection (Person dwell time > 15 seconds)
+        # 5. Loitering Detection (Person dwell time > 15 seconds)
         filtered = self._update_loitering(camera_id, filtered, now)
 
         return filtered
@@ -289,10 +317,33 @@ class EdgeDetector:
         detections: list[DetectionResult],
         camera_name: str,
         fps: float = 0.0,
-        roi_polygon: list[list[float]] | None = None
+        roi_polygon: list[list[float]] | None = None,
+        exclusion_zones: list[list[list[float]]] | None = None
     ) -> np.ndarray:
         out = frame.copy()
         h, w = out.shape[:2]
+
+        # Draw Exclusion Zones if configured (Subtle masked hatch overlay)
+        if exclusion_zones:
+            for zone in exclusion_zones:
+                if len(zone) >= 3:
+                    pts = np.array([[int(p[0] * w), int(p[1] * h)] for p in zone], dtype=np.int32)
+                    overlay = out.copy()
+                    cv2.fillPoly(overlay, [pts], (20, 20, 60))
+                    cv2.addWeighted(overlay, 0.40, out, 0.60, 0, out)
+                    cv2.polylines(out, [pts], isClosed=True, color=(70, 70, 190), thickness=2, lineType=cv2.LINE_AA)
+                    top_pt = pts[0]
+                    cv2.putText(out, "AREA DIABAIKAN (MASK)", (int(top_pt[0]) + 4, max(48, int(top_pt[1]) - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (120, 120, 230), 1, cv2.LINE_AA)
+                elif len(zone) == 2:
+                    zx1 = int(min(zone[0][0], zone[1][0]) * w)
+                    zx2 = int(max(zone[0][0], zone[1][0]) * w)
+                    zy1 = int(min(zone[0][1], zone[1][1]) * h)
+                    zy2 = int(max(zone[0][1], zone[1][1]) * h)
+                    overlay = out.copy()
+                    cv2.rectangle(overlay, (zx1, zy1), (zx2, zy2), (20, 20, 60), -1)
+                    cv2.addWeighted(overlay, 0.40, out, 0.60, 0, out)
+                    cv2.rectangle(out, (zx1, zy1), (zx2, zy2), (70, 70, 190), 2)
+                    cv2.putText(out, "AREA DIABAIKAN (MASK)", (zx1 + 5, max(48, zy1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (120, 120, 230), 1, cv2.LINE_AA)
 
         # Draw ROI Polygon if configured
         if roi_polygon and len(roi_polygon) >= 3:

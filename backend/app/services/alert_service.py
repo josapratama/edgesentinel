@@ -1,10 +1,12 @@
+import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 import httpx
-from sqlalchemy import select
-from app.core.config import settings
+from sqlalchemy import select, func
+from app.core.config import settings, SNAPSHOTS_DIR, RECORDINGS_DIR
 from app.core.database import AsyncSessionLocal
 from app.models.entities import AlertRule, SecurityEvent, Camera
+from app.services.telegram_service import telegram_service
 
 logger = logging.getLogger("edgesentinel.alert")
 
@@ -12,6 +14,78 @@ logger = logging.getLogger("edgesentinel.alert")
 class AlertService:
     def __init__(self):
         self.cooldown_tracker: dict[str, float] = {}
+        self.last_digest_date: str | None = None
+        self.digest_task: asyncio.Task | None = None
+
+    def start_scheduler(self):
+        if not self.digest_task:
+            self.digest_task = asyncio.create_task(self._morning_digest_loop())
+
+    async def _morning_digest_loop(self):
+        """Checks every 15 minutes if it's 07:00 WIB and sends the morning security digest."""
+        logger.info("Morning security digest scheduler started.")
+        while True:
+            try:
+                now_utc = datetime.now(timezone.utc)
+                now_wib = now_utc + timedelta(hours=7)
+                today_str = now_wib.strftime("%Y-%m-%d")
+
+                # Trigger between 07:00 and 07:15 WIB once a day
+                if now_wib.hour == 7 and self.last_digest_date != today_str:
+                    self.last_digest_date = today_str
+                    await self._send_daily_digest(today_str)
+
+                await asyncio.sleep(600)  # Check every 10 minutes
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in morning digest loop: {e}")
+                await asyncio.sleep(300)
+
+    async def _send_daily_digest(self, date_str: str):
+        """Constructs and broadcasts morning summary to all active WhatsApp recipients."""
+        since_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+        async with AsyncSessionLocal() as session:
+            stmt_rules = select(AlertRule).where(AlertRule.is_active.is_(True))
+            rules = (await session.execute(stmt_rules)).scalars().all()
+            if not rules:
+                return
+
+            stmt_cnt = select(func.count(SecurityEvent.id)).where(SecurityEvent.created_at >= since_24h)
+            total_events = (await session.execute(stmt_cnt)).scalar() or 0
+
+            stmt_person = select(func.count(SecurityEvent.id)).where(
+                SecurityEvent.created_at >= since_24h,
+                SecurityEvent.object_class == "person"
+            )
+            person_cnt = (await session.execute(stmt_person)).scalar() or 0
+
+            # Collect unique phone numbers
+            recipients = {r.whatsapp_number.strip().replace("+", "").replace("-", "").replace(" ", "") for r in rules if r.whatsapp_number}
+
+            message = (
+                f"📋 *[Laporan Keamanan Pagi EdgeSentinel]*\n"
+                f"📅 *Tanggal:* {date_str}\n"
+                f"⏰ *Waktu:* 07:00 WIB\n\n"
+                f"🛡️ *Ringkasan 24 Jam Terakhir:*\n"
+                f"• Total Objek Terdeteksi: {total_events}\n"
+                f"• Deteksi Orang: {person_cnt} kali\n"
+                f"• Status Rumah: Aman & Terkendali 🟢\n\n"
+                f"Ketik *!status* untuk info detail atau *!foto 1* untuk cek kamera."
+            )
+
+            for phone in recipients:
+                try:
+                    async with httpx.AsyncClient(timeout=8.0) as client:
+                        target_url = f"{settings.WABRIDGE_URL.rstrip('/')}/send"
+                        payload = {"phone": phone, "message": message}
+                        await client.post(target_url, json=payload)
+                except Exception as e:
+                    logger.warning(f"Failed sending daily digest to {phone}: {e}")
+
+            # Also broadcast to Telegram if configured
+            if telegram_service.is_configured:
+                await telegram_service.send_alert(message)
 
     async def evaluate_event(self, event: SecurityEvent, camera: Camera):
         """
@@ -111,8 +185,22 @@ class AlertService:
             f"⏰ *Waktu:* {local_time_str}\n"
             f"🎯 *Peraturan:* {rule.name}\n\n"
             f"📸 *Snapshot Foto:* {snapshot_url}\n"
-            f"📡 *Live Pantau CCTV:* {live_url}"
+            f"📡 *Live Pantau CCTV:* {live_url}\n\n"
+            f"⚡ *Balas Perintah Cepat:*\n"
+            f"• *!sirine* ➡️ Bunyikan sirine speaker di rumah\n"
+            f"• *!video* ➡️ Minta rekaman video klip kejadian\n"
+            f"• *!foto* ➡️ Minta foto live terkini"
         )
+
+        # Also dispatch to Telegram backup channel in background
+        if telegram_service.is_configured:
+            photo_file = SNAPSHOTS_DIR / event.snapshot_filename
+            video_file = (RECORDINGS_DIR / event.video_filename) if event.video_filename else None
+            asyncio.create_task(telegram_service.send_alert(
+                caption=message,
+                photo_path=photo_file if photo_file.exists() else None,
+                video_path=video_file if video_file and video_file.exists() else None
+            ))
 
         try:
             async with httpx.AsyncClient(timeout=6.0) as client:

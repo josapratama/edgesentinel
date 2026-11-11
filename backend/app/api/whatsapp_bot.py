@@ -139,16 +139,80 @@ async def whatsapp_webhook(payload: dict):
         await send_wa_reply(phone, reply)
         return {"status": "handled", "command": "disarm"}
 
-    # 6. COMMAND: !help / !menu
+    # 6. COMMAND: !sirine / !bunyi (Physical Audio Deterrence)
+    elif cmd in ["!sirine", "!bunyi", "/sirine", "/alarm"]:
+        from app.services.siren_service import siren_service
+        await siren_service.trigger(duration_seconds=10.0)
+        reply = (
+            "🚨 *[Sirine Speaker Diaktifkan!]*\n"
+            "Sirine audio di lokasi berhasil dibunyikan selama 10 detik untuk menakuti penyusup!"
+        )
+        await send_wa_reply(phone, reply)
+        return {"status": "handled", "command": "siren"}
+
+    # 7. COMMAND: !video / !klip (Send latest MP4 video recording)
+    elif cmd in ["!video", "!klip", "/video"]:
+        async with AsyncSessionLocal() as session:
+            stmt = select(SecurityEvent).where(SecurityEvent.video_url.isnot(None)).order_by(SecurityEvent.created_at.desc()).limit(1)
+            res = await session.execute(stmt)
+            event = res.scalar_one_or_none()
+
+        if not event or not event.video_url:
+            await send_wa_reply(phone, "ℹ️ Belum ada rekaman klip video kejadian yang tersimpan.")
+            return {"status": "no_video"}
+
+        reply = (
+            f"🎥 *[Klip Video Kejadian Terakhir]*\n\n"
+            f"📹 *Kamera:* {event.camera_name}\n"
+            f"🏷️ *Objek:* {event.object_class.upper()} ({int(event.confidence * 100)}%)\n"
+            f"🕒 *Waktu:* {event.created_at.strftime('%d/%m/%Y %H:%M:%S UTC')}\n"
+            f"🔗 {event.video_url}"
+        )
+        await send_wa_reply(phone, reply, media_url=event.video_url)
+        return {"status": "handled", "command": "video", "video_url": event.video_url}
+
+    # 8. COMMAND: !rekap / !digest
+    elif cmd in ["!rekap", "!digest", "/rekap", "!laporan"]:
+        since_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+        async with AsyncSessionLocal() as session:
+            stmt = select(func.count(SecurityEvent.id)).where(SecurityEvent.created_at >= since_24h)
+            cnt_res = await session.execute(stmt)
+            total_events = cnt_res.scalar() or 0
+
+            stmt_person = select(func.count(SecurityEvent.id)).where(
+                SecurityEvent.created_at >= since_24h,
+                SecurityEvent.object_class == "person"
+            )
+            person_cnt = (await session.execute(stmt_person)).scalar() or 0
+
+        cpu = psutil.cpu_percent(interval=None)
+        mem = psutil.virtual_memory().percent
+        disk = psutil.disk_usage("/")
+        free_gb = disk.free / (1024 ** 3)
+
+        reply = (
+            f"📊 *[Laporan Keamanan 24 Jam EdgeSentinel]*\n\n"
+            f"🚨 *Total Kejadian:* {total_events} deteksi\n"
+            f"👤 *Deteksi Orang:* {person_cnt} kali\n"
+            f"⚡ *CPU:* {cpu}% | 💾 *RAM:* {mem}%\n"
+            f"📦 *Sisa Storage:* {free_gb:.1f} GB\n"
+            f"🟢 *Status Sistem:* Berjalan normal & terlindungi."
+        )
+        await send_wa_reply(phone, reply)
+        return {"status": "handled", "command": "digest"}
+
+    # 9. COMMAND: !help / !menu
     elif cmd in ["!help", "!menu", "help", "menu", "/help"]:
         reply = (
             f"🤖 *[Menu Perintah WhatsApp EdgeSentinel]*\n\n"
             f"📌 *!status* - Cek kesehatan sistem & CCTV\n"
             f"📸 *!foto 1* - Minta foto snapshot live kamera 1\n"
-            f"📸 *!foto 2* - Minta foto snapshot live kamera 2\n"
-            f"🟢 *!arm* - Aktifkan proteksi WhatsApp 24 Jam\n"
-            f"🌙 *!malam* - Aktifkan proteksi khusus malam hari\n"
-            f"🔕 *!senyap* - Matikan alarm WhatsApp sementara\n\n"
+            f"🎥 *!video* - Minta video klip MP4 kejadian terakhir\n"
+            f"🚨 *!sirine* - Bunyikan sirine speaker di lokasi (10 dtk)\n"
+            f"📊 *!rekap* - Laporan rekapitulasi kejadian 24 jam\n"
+            f"🟢 *!arm* - Aktifkan proteksi 24 Jam\n"
+            f"🌙 *!malam* - Proteksi khusus malam hari (21:00-05:00)\n"
+            f"🔕 *!senyap* - Matikan alarm sementara\n\n"
             f"🌐 Live Monitoring: {settings.PUBLIC_URL}"
         )
         await send_wa_reply(phone, reply)

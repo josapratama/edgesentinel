@@ -29,6 +29,7 @@ def _to_camera_response(cam: Camera) -> CameraResponse:
         error_message=err_msg,
         resolution=res_val,
         roi_polygon_json=cam.roi_polygon_json,
+        exclusion_zones_json=cam.exclusion_zones_json,
         created_at=cam.created_at,
         updated_at=cam.updated_at
     )
@@ -52,6 +53,7 @@ async def create_camera(payload: CameraCreate, db: AsyncSession = Depends(get_db
         detection_enabled=payload.detection_enabled,
         fps_limit=payload.fps_limit,
         roi_polygon_json=payload.roi_polygon_json,
+        exclusion_zones_json=payload.exclusion_zones_json,
         status="online"
     )
     db.add(camera)
