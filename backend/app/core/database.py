@@ -41,6 +41,7 @@ async def init_db():
             ("cameras", "roi_polygon_json", "TEXT"),
             ("security_events", "video_filename", "VARCHAR(255)"),
             ("security_events", "video_url", "VARCHAR(500)"),
+            ("security_events", "is_loitering", "BOOLEAN DEFAULT 0"),
         ]
         for table, col, col_type in columns_to_ensure:
             try:

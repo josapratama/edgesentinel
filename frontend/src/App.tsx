@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from './lib/api'
+import { playSecuritySirenAlert } from './lib/sound'
 import type { Camera, AlertRule } from './types'
 import { Navbar } from './components/Navbar'
 import { CameraCard } from './components/CameraCard'
@@ -59,6 +60,19 @@ export default function App() {
       void queryClient.invalidateQueries({ queryKey: ['arming-mode'] })
     },
   })
+
+  // Web Audio Siren Alert on incoming events
+  const [soundEnabled, setSoundEnabled] = useState(false)
+  const prevEventsCount = useRef(events.length)
+
+  useEffect(() => {
+    if (events.length > prevEventsCount.current && prevEventsCount.current > 0) {
+      if (soundEnabled && armingData?.mode !== 'disarmed') {
+        playSecuritySirenAlert()
+      }
+    }
+    prevEventsCount.current = events.length
+  }, [events.length, soundEnabled, armingData?.mode])
 
   // Mutations
   const saveCameraMutation = useMutation({
@@ -153,6 +167,8 @@ export default function App() {
         isRefreshing={isRefreshingCameras}
         armingMode={armingData?.mode || 'always'}
         onChangeArmingMode={(mode) => setArmingMutation.mutate(mode)}
+        soundAlarm={soundEnabled}
+        onToggleSound={() => setSoundEnabled(!soundEnabled)}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6">

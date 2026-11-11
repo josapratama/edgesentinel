@@ -304,6 +304,7 @@ class ActiveCameraWorker:
                     snapshot_url=snapshot_url,
                     video_filename=None,
                     video_url=None,
+                    is_loitering=best.is_loitering,
                     bbox_json=bbox_json,
                     notified_whatsapp=False,
                     created_at=datetime.now(timezone.utc)

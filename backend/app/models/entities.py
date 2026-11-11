@@ -42,6 +42,7 @@ class SecurityEvent(Base):
     snapshot_url: Mapped[str] = mapped_column(String(500), nullable=False)
     video_filename: Mapped[str | None] = mapped_column(String(200), nullable=True)
     video_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    is_loitering: Mapped[bool] = mapped_column(Boolean, default=False)
     bbox_json: Mapped[str] = mapped_column(Text, default="[]")  # "[x, y, w, h]" normalized
     notified_whatsapp: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

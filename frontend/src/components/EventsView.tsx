@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Trash2, ExternalLink, CheckCircle2, XCircle, Search, Filter, Play, Film } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Trash2, ExternalLink, CheckCircle2, XCircle, Search, Filter, Play, Film, Clock, AlertTriangle } from 'lucide-react'
 import type { SecurityEvent, Camera } from '../types'
 import { formatDateTime } from '../lib/utils'
 
@@ -12,17 +12,103 @@ interface EventsViewProps {
 export function EventsView({ events, cameras, onDeleteEvent }: EventsViewProps) {
   const [selectedCamera, setSelectedCamera] = useState<string>('')
   const [selectedClass, setSelectedClass] = useState<string>('')
+  const [selectedHour, setSelectedHour] = useState<number | null>(null)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [playingVideo, setPlayingVideo] = useState<string | null>(null)
+
+  // Calculate 24-hour distribution for timeline
+  const hourlyCounts = useMemo(() => {
+    const counts = Array(24).fill(0)
+    events.forEach((evt) => {
+      try {
+        const d = new Date(evt.created_at)
+        const hr = d.getHours()
+        counts[hr] += 1
+      } catch {
+        // ignore date parse err
+      }
+    })
+    return counts
+  }, [events])
+
+  const maxHourlyCount = Math.max(1, ...hourlyCounts)
 
   const filteredEvents = events.filter((e) => {
     if (selectedCamera && e.camera_id !== selectedCamera) return false
     if (selectedClass && e.object_class.toLowerCase() !== selectedClass.toLowerCase()) return false
+    if (selectedHour !== null) {
+      try {
+        const hr = new Date(e.created_at).getHours()
+        if (hr !== selectedHour) return false
+      } catch {
+        return false
+      }
+    }
     return true
   })
 
   return (
     <div className="space-y-6">
+      {/* 24-Hour Interactive Timeline Bar */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 backdrop-blur-md space-y-2">
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1.5 font-semibold text-slate-200">
+            <Clock className="h-4 w-4 text-cyan-400" />
+            <span>Timeline Kejadian 24 Jam</span>
+            {selectedHour !== null && (
+              <span className="text-[11px] font-normal text-amber-400">
+                (Memfilter Jam {selectedHour.toString().padStart(2, '0')}:00)
+              </span>
+            )}
+          </div>
+          {selectedHour !== null && (
+            <button
+              onClick={() => setSelectedHour(null)}
+              className="text-[11px] text-cyan-400 hover:underline"
+            >
+              Reset ke Semua Jam
+            </button>
+          )}
+        </div>
+
+        {/* 24 hour bars */}
+        <div className="grid grid-cols-24 gap-1 items-end h-14 pt-2 border-b border-slate-800/80">
+          {hourlyCounts.map((count, hour) => {
+            const heightPct = count > 0 ? Math.max(15, (count / maxHourlyCount) * 100) : 4
+            const isSelected = selectedHour === hour
+            return (
+              <button
+                key={hour}
+                type="button"
+                onClick={() => setSelectedHour(selectedHour === hour ? null : hour)}
+                title={`Pukul ${hour.toString().padStart(2, '0')}:00 - ${count} Kejadian`}
+                className={`group relative flex flex-col justify-end w-full h-full rounded-xs transition-all ${
+                  isSelected
+                    ? 'bg-amber-500 ring-2 ring-amber-400 shadow-md'
+                    : count > 0
+                    ? 'bg-cyan-600/70 hover:bg-cyan-500'
+                    : 'bg-slate-800/50 hover:bg-slate-700/60'
+                }`}
+              >
+                <div
+                  style={{ height: `${heightPct}%` }}
+                  className={`w-full rounded-xs transition-all ${
+                    count > 0 ? (isSelected ? 'bg-amber-400' : 'bg-cyan-400') : 'bg-transparent'
+                  }`}
+                />
+              </button>
+            )
+          })}
+        </div>
+        <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+          <span>00:00</span>
+          <span>06:00</span>
+          <span>12:00</span>
+          <span>18:00</span>
+          <span>23:59</span>
+        </div>
+      </div>
+
       {/* Filters Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 backdrop-blur-md">
         <div className="flex flex-wrap items-center gap-3 text-xs">
@@ -77,7 +163,11 @@ export function EventsView({ events, cameras, onDeleteEvent }: EventsViewProps) 
           {filteredEvents.map((evt) => (
             <div
               key={evt.id}
-              className="group flex flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80 shadow-md hover:border-cyan-500/40 transition-all"
+              className={`group flex flex-col overflow-hidden rounded-2xl border bg-slate-900/80 shadow-md transition-all ${
+                evt.is_loitering
+                  ? 'border-rose-500/80 hover:border-rose-400'
+                  : 'border-slate-800 hover:border-cyan-500/40'
+              }`}
             >
               {/* Snapshot thumbnail */}
               <div
@@ -105,8 +195,16 @@ export function EventsView({ events, cameras, onDeleteEvent }: EventsViewProps) 
                   </div>
                 )}
 
-                <div className="absolute top-2 left-2 rounded-md bg-black/75 px-2 py-0.5 text-[10px] font-bold text-white uppercase backdrop-blur-md border border-white/10">
-                  {evt.object_class} ({int(evt.confidence * 100)}%)
+                <div className="absolute top-2 left-2 flex items-center gap-1">
+                  <div className="rounded-md bg-black/75 px-2 py-0.5 text-[10px] font-bold text-white uppercase backdrop-blur-md border border-white/10">
+                    {evt.object_class} ({int(evt.confidence * 100)}%)
+                  </div>
+                  {evt.is_loitering && (
+                    <div className="flex items-center gap-0.5 rounded-md bg-rose-600 px-1.5 py-0.5 text-[9px] font-bold text-white shadow">
+                      <AlertTriangle className="h-2.5 w-2.5" />
+                      <span>LOITERING</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="absolute top-2 right-2 flex items-center gap-1">

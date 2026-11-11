@@ -9,7 +9,8 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import settings, SNAPSHOTS_DIR, RECORDINGS_DIR
 from app.core.database import init_db
 from app.services.camera_manager import camera_manager
-from app.api import cameras, events, rules, streams, system
+from app.services.storage_cleaner import storage_cleaner
+from app.api import cameras, events, rules, streams, system, whatsapp_bot
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,9 +25,11 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Starting camera stream workers...")
     await camera_manager.initialize_all()
+    storage_cleaner.start()
     logger.info(f"EdgeSentinel AI NVR ready on {settings.HOST}:{settings.PORT}")
     yield
     logger.info("Shutting down camera stream workers...")
+    storage_cleaner.stop()
     await camera_manager.stop_all()
     logger.info("EdgeSentinel stopped cleanly.")
 
@@ -57,6 +60,7 @@ app.include_router(events.router, prefix="/api")
 app.include_router(rules.router, prefix="/api")
 app.include_router(streams.router, prefix="/api")
 app.include_router(system.router, prefix="/api")
+app.include_router(whatsapp_bot.router, prefix="/api")
 
 
 @app.get("/api/health")

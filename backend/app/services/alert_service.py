@@ -100,10 +100,14 @@ class AlertService:
         live_url = f"{public_base}/"
         local_time_str = (event.created_at + timedelta(hours=7)).strftime("%d-%m-%Y %H:%M:%S WIB")
 
+        alert_title = "⚠️ *[PERINGATAN LOITERING / MENGINTAI]*" if getattr(event, "is_loitering", False) else "🚨 *[EdgeSentinel AI Alert]*"
+        loitering_warn = "\n⚠️ *PERINGATAN:* Objek mencurigakan terdeteksi berdiam diri >15 detik!\n" if getattr(event, "is_loitering", False) else ""
+
         message = (
-            f"🚨 *[EdgeSentinel AI Alert]*\n\n"
+            f"{alert_title}\n\n"
             f"📹 *Kamera:* {camera.name} ({camera.location})\n"
             f"🔍 *Objek Terdeteksi:* {event.object_class.upper()} (Akurasi: {int(event.confidence * 100)}%)\n"
+            f"{loitering_warn}"
             f"⏰ *Waktu:* {local_time_str}\n"
             f"🎯 *Peraturan:* {rule.name}\n\n"
             f"📸 *Snapshot Foto:* {snapshot_url}\n"

@@ -54,6 +54,7 @@ class SecurityEventResponse(BaseModel):
     snapshot_url: str
     video_filename: str | None = None
     video_url: str | None = None
+    is_loitering: bool = False
     bbox_json: str
     notified_whatsapp: bool
     created_at: datetime

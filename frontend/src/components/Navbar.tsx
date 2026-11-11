@@ -1,4 +1,4 @@
-import { Shield, Eye, Bell, Video, Cpu, HardDrive, RefreshCw, Moon, BellOff, ShieldAlert } from 'lucide-react'
+import { Shield, Eye, Bell, Video, Cpu, HardDrive, RefreshCw, Moon, BellOff, ShieldAlert, Volume2, VolumeX } from 'lucide-react'
 import type { SystemStats, ArmingMode } from '../types'
 import { formatUptime } from '../lib/utils'
 
@@ -11,6 +11,8 @@ interface NavbarProps {
   isRefreshing?: boolean
   armingMode: ArmingMode
   onChangeArmingMode: (mode: ArmingMode) => void
+  soundAlarm?: boolean
+  onToggleSound?: () => void
 }
 
 export function Navbar({
@@ -22,6 +24,8 @@ export function Navbar({
   isRefreshing,
   armingMode,
   onChangeArmingMode,
+  soundAlarm,
+  onToggleSound,
 }: NavbarProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/85 backdrop-blur-md px-4 py-3">
@@ -157,6 +161,20 @@ export function Navbar({
               <span className="hidden sm:inline">Kamera</span>
             </button>
           </div>
+
+          {onToggleSound && (
+            <button
+              onClick={onToggleSound}
+              title={soundAlarm ? 'Suara Sirine Web: Aktif' : 'Suara Sirine Web: Bisu'}
+              className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-colors ${
+                soundAlarm
+                  ? 'border-amber-600/60 bg-amber-950/60 text-amber-400 hover:bg-amber-900/60'
+                  : 'border-slate-800 bg-slate-900 text-slate-500 hover:bg-slate-800 hover:text-slate-300'
+              }`}
+            >
+              {soundAlarm ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </button>
+          )}
 
           <button
             onClick={onRefresh}

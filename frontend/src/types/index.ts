@@ -33,6 +33,7 @@ export interface SecurityEvent {
   snapshot_url: string
   video_filename?: string | null
   video_url?: string | null
+  is_loitering?: boolean
   bbox_json: string
   notified_whatsapp: boolean
   created_at: string
