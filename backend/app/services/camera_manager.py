@@ -20,6 +20,26 @@ from app.services.alert_service import alert_service
 logger = logging.getLogger("edgesentinel.camera")
 
 
+def enhance_cctv_frame(frame: np.ndarray) -> np.ndarray:
+    """
+    Applies adaptive contrast enhancement and subtle unsharp masking to CCTV frames.
+    Reduces milky/foggy infrared glow and sharpens details.
+    """
+    try:
+        lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+        l_chan, a_chan, b_chan = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        cl = clahe.apply(l_chan)
+        merged_lab = cv2.merge((cl, a_chan, b_chan))
+        enhanced = cv2.cvtColor(merged_lab, cv2.COLOR_LAB2BGR)
+
+        blurred = cv2.GaussianBlur(enhanced, (0, 0), 2.0)
+        sharpened = cv2.addWeighted(enhanced, 1.3, blurred, -0.3, 0)
+        return sharpened
+    except Exception:
+        return frame
+
+
 class ActiveCameraWorker:
     def __init__(self, camera_data: dict):
         self.id = camera_data["id"]
@@ -148,10 +168,17 @@ class ActiveCameraWorker:
                     await asyncio.sleep(0.1)
                     continue
 
-                # Resize if overly large to conserve CPU
+                # Handle 1080 Lite / 1080N anamorphic resolution (960x1080 -> standard 16:9 1280x720)
                 h, w = frame.shape[:2]
-                if w > 1280:
+                if w == 960 and h == 1080:
+                    frame = cv2.resize(frame, (1280, 720), interpolation=cv2.INTER_LINEAR)
+                    h, w = 720, 1280
+                elif w > 1280:
                     frame = cv2.resize(frame, (1280, int(h * (1280 / w))))
+
+                # Enhance clarity & contrast for real RTSP camera feed (removes night vision fog)
+                if not is_demo:
+                    frame = enhance_cctv_frame(frame)
 
                 # 2. Run Vision Detection (if enabled) with ROI filtering
                 detections: list[DetectionResult] = []
@@ -372,7 +399,7 @@ class CameraManager:
         worker = self.workers.get(camera_id)
         while True:
             if worker and worker.latest_frame is not None:
-                ret, jpeg = cv2.imencode('.jpg', worker.latest_frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                ret, jpeg = cv2.imencode('.jpg', worker.latest_frame, [cv2.IMWRITE_JPEG_QUALITY, 88])
                 if ret:
                     yield (
                         b"--frame\r\n"
