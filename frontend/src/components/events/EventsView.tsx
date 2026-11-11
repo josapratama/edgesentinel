@@ -135,3 +135,4 @@ export function EventsView({ events, cameras, onDeleteEvent }: EventsViewProps) 
     </div>
   )
 }
+

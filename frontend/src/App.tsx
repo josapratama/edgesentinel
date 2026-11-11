@@ -160,15 +160,12 @@ export default function App() {
     <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col pb-20 md:pb-6 selection:bg-cyan-500/30 selection:text-cyan-200">
       {/* Top Command Bar */}
       <Header
-        stats={stats || null}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         onAddCamera={() => {
           setSelectedCamera(null)
           setCameraModalOpen(true)
         }}
-        onRefresh={handleManualRefresh}
-        isRefreshing={isRefreshingCameras}
         armingMode={armingData?.mode || 'always'}
         onChangeArmingMode={(mode) => setArmingMutation.mutate(mode)}
         soundAlarm={soundEnabled}
@@ -185,6 +182,9 @@ export default function App() {
               setCameraModalOpen(true)
             }}
             onToggleDetection={(cam) => toggleCameraDetectionMutation.mutate(cam)}
+            stats={stats || null}
+            onRefresh={handleManualRefresh}
+            isRefreshing={isRefreshingCameras}
           />
         )}
 

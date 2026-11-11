@@ -189,3 +189,4 @@ export function RuleModal({ isOpen, onClose, onSave, initialData }: RuleModalPro
     </div>
   )
 }
+

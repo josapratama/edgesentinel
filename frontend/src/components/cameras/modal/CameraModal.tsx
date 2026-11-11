@@ -186,3 +186,4 @@ export function CameraModal({ isOpen, onClose, onSave, initialData }: CameraModa
     </div>
   )
 }
+

@@ -32,3 +32,4 @@ export function SnapshotModal({ imageUrl, onClose }: SnapshotModalProps) {
     </div>
   )
 }
+

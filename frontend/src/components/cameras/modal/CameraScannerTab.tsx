@@ -116,3 +116,4 @@ export function CameraScannerTab({ onApplyDiscovered }: CameraScannerTabProps) {
     </div>
   )
 }
+

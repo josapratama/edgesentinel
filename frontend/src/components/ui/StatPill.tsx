@@ -23,3 +23,4 @@ export function StatPill({ icon, label, value, highlight = false, className = ''
     </div>
   )
 }
+

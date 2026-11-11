@@ -160,3 +160,4 @@ export function CameraCard({ camera, onEdit, onToggleDetection }: CameraCardProp
     </div>
   )
 }
+
