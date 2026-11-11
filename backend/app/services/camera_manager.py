@@ -48,10 +48,13 @@ class ActiveCameraWorker:
             self.task.cancel()
             try:
                 await self.task
-            except asyncio.CancelledError:
+            except (asyncio.CancelledError, Exception):
                 pass
         if self.cap:
-            self.cap.release()
+            try:
+                self.cap.release()
+            except Exception:
+                pass
             self.cap = None
         logger.info(f"Camera worker '{self.name}' stopped.")
 
@@ -73,56 +76,62 @@ class ActiveCameraWorker:
         last_time = time.time()
 
         while self.is_running:
-            start_tick = time.time()
-            self.frame_counter += 1
+            try:
+                start_tick = time.time()
+                self.frame_counter += 1
 
-            # 1. Grab Frame
-            frame: np.ndarray | None = None
-            if not is_demo and self.cap and self.cap.isOpened():
-                ret, captured = self.cap.read()
-                if ret and captured is not None:
-                    frame = captured
+                # 1. Grab Frame
+                frame: np.ndarray | None = None
+                if not is_demo and self.cap and self.cap.isOpened():
+                    ret, captured = self.cap.read()
+                    if ret and captured is not None:
+                        frame = captured
+                    else:
+                        # Temporary read drop, generate synthetic fallback frame
+                        frame = generate_synthetic_cctv_frame(self.name, self.frame_counter)
                 else:
-                    # Temporary read drop, generate synthetic fallback frame
                     frame = generate_synthetic_cctv_frame(self.name, self.frame_counter)
-            else:
-                frame = generate_synthetic_cctv_frame(self.name, self.frame_counter)
 
-            if frame is None:
-                await asyncio.sleep(0.1)
-                continue
+                if frame is None:
+                    await asyncio.sleep(0.1)
+                    continue
 
-            # Resize if overly large to conserve Pi CPU
-            h, w = frame.shape[:2]
-            if w > 1280:
-                frame = cv2.resize(frame, (1280, int(h * (1280 / w))))
+                # Resize if overly large to conserve Pi CPU
+                h, w = frame.shape[:2]
+                if w > 1280:
+                    frame = cv2.resize(frame, (1280, int(h * (1280 / w))))
 
-            # 2. Run Vision Detection (if enabled)
-            detections: list[DetectionResult] = []
-            if self.detection_enabled:
-                detections = detector.detect(frame, self.id, threshold=settings.CONFIDENCE_THRESHOLD)
-                self.latest_detections = detections
+                # 2. Run Vision Detection (if enabled)
+                detections: list[DetectionResult] = []
+                if self.detection_enabled:
+                    detections = detector.detect(frame, self.id, threshold=settings.CONFIDENCE_THRESHOLD)
+                    self.latest_detections = detections
 
-                # Check if significant event should be saved
-                now_epoch = time.time()
-                if detections and (now_epoch - self.last_event_time) >= 10.0:  # 10s cooldown per camera event record
-                    self.last_event_time = now_epoch
-                    asyncio.create_task(self._record_security_event(frame, detections))
+                    # Check if significant event should be saved
+                    now_epoch = time.time()
+                    if detections and (now_epoch - self.last_event_time) >= 10.0:  # 10s cooldown per camera event record
+                        self.last_event_time = now_epoch
+                        asyncio.create_task(self._record_security_event(frame, detections))
 
-            # 3. Calculate FPS & Store latest annotated frame
-            elapsed = time.time() - last_time
-            if elapsed > 0:
-                self.current_fps = 0.9 * self.current_fps + 0.1 * (1.0 / elapsed)
-            last_time = time.time()
+                # 3. Calculate FPS & Store latest annotated frame
+                elapsed = time.time() - last_time
+                if elapsed > 0:
+                    self.current_fps = 0.9 * self.current_fps + 0.1 * (1.0 / elapsed)
+                last_time = time.time()
 
-            annotated = detector.draw_overlay(frame, detections, self.name, self.current_fps)
-            self.latest_frame = annotated
+                annotated = detector.draw_overlay(frame, detections, self.name, self.current_fps)
+                self.latest_frame = annotated
 
-            # Rate limit target FPS
-            target_delay = 1.0 / max(1.0, self.fps_limit)
-            spent = time.time() - start_tick
-            sleep_time = max(0.01, target_delay - spent)
-            await asyncio.sleep(sleep_time)
+                # Rate limit target FPS
+                target_delay = 1.0 / max(1.0, self.fps_limit)
+                spent = time.time() - start_tick
+                sleep_time = max(0.01, target_delay - spent)
+                await asyncio.sleep(sleep_time)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in camera loop '{self.name}': {e}")
+                await asyncio.sleep(0.2)
 
     async def _record_security_event(self, raw_frame: np.ndarray, detections: list[DetectionResult]):
         try:

@@ -32,46 +32,49 @@ class EdgeDetector:
 
     def detect(self, frame: np.ndarray, camera_id: str, threshold: float = 0.45) -> list[DetectionResult]:
         results: list[DetectionResult] = []
-        h, w = frame.shape[:2]
+        try:
+            h, w = frame.shape[:2]
 
-        # 1. Motion Analysis via background subtraction
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        gray = cv2.GaussianBlur(gray, (21, 21), 0)
+            # 1. Motion Analysis via background subtraction
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
-        prev_gray = self.prev_frames.get(camera_id)
-        self.prev_frames[camera_id] = gray
+            prev_gray = self.prev_frames.get(camera_id)
+            self.prev_frames[camera_id] = gray
 
-        if prev_gray is not None:
-            delta = cv2.absdiff(prev_gray, gray)
-            thresh = cv2.threshold(delta, 25, 255, cv2.THRESH_BINARY)[1]
-            thresh = cv2.dilate(thresh, None, iterations=2)
-            contours, _ = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if prev_gray is not None and prev_gray.shape == gray.shape:
+                delta = cv2.absdiff(prev_gray, gray)
+                thresh = cv2.threshold(delta, 25, 255, cv2.THRESH_BINARY)[1]
+                thresh = cv2.dilate(thresh, None, iterations=2)
+                contours, _ = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-            for c in contours:
-                area = cv2.contourArea(c)
-                if area < 1500:  # Noise threshold
-                    continue
+                for c in contours:
+                    area = cv2.contourArea(c)
+                    if area < 1500:  # Noise threshold
+                        continue
 
-                x, y, cw, ch = cv2.boundingRect(c)
-                aspect_ratio = ch / float(cw)
-                conf = min(0.96, 0.55 + (area / (w * h)) * 1.5)
+                    x, y, cw, ch = cv2.boundingRect(c)
+                    aspect_ratio = ch / float(cw)
+                    conf = min(0.96, 0.55 + (area / (w * h)) * 1.5)
 
-                if conf < threshold:
-                    continue
+                    if conf < threshold:
+                        continue
 
-                # Heuristic categorization based on shape ratio & area
-                if aspect_ratio > 1.4:
-                    label = "person"
-                elif aspect_ratio < 0.8 and cw > 80:
-                    label = "car"
-                elif 0.8 <= aspect_ratio <= 1.4 and area < 8000:
-                    label = "package"
-                elif aspect_ratio < 1.1:
-                    label = "motorcycle"
-                else:
-                    label = "person"
+                    # Heuristic categorization based on shape ratio & area
+                    if aspect_ratio > 1.4:
+                        label = "person"
+                    elif aspect_ratio < 0.8 and cw > 80:
+                        label = "car"
+                    elif 0.8 <= aspect_ratio <= 1.4 and area < 8000:
+                        label = "package"
+                    elif aspect_ratio < 1.1:
+                        label = "motorcycle"
+                    else:
+                        label = "person"
 
-                results.append(DetectionResult(label, conf, (x, y, x + cw, y + ch)))
+                    results.append(DetectionResult(label, conf, (x, y, x + cw, y + ch)))
+        except Exception as e:
+            logger.error(f"Detector error on camera {camera_id}: {e}")
 
         return results
 
