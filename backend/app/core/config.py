@@ -5,27 +5,34 @@ from pydantic_settings import BaseSettings
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = BASE_DIR / "data"
 SNAPSHOTS_DIR = DATA_DIR / "snapshots"
+RECORDINGS_DIR = DATA_DIR / "recordings"
 
 # Ensure directories exist
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class Settings(BaseSettings):
     APP_NAME: str = "EdgeSentinel AI NVR"
-    VERSION: str = "1.0.0"
+    VERSION: str = "1.2.0"
     DEBUG: bool = False
 
     # Server Host & Port
     HOST: str = "0.0.0.0"
     PORT: int = 8000
+    PUBLIC_URL: str = os.getenv("APP_URL", "https://edgesentinel.josapratama.com")
 
     # Storage
     DATA_PATH: str = str(DATA_DIR)
     SNAPSHOTS_PATH: str = str(SNAPSHOTS_DIR)
+    RECORDINGS_PATH: str = str(RECORDINGS_DIR)
 
     # Database (Async SQLite)
     DATABASE_URL: str = f"sqlite+aiosqlite:///{DATA_DIR}/sentinel.db"
+
+    # Security & Arming Mode: 'always' | 'night_only' | 'disarmed'
+    ARMING_MODE: str = os.getenv("ARMING_MODE", "always")
 
     # WhatsApp Notification Integration (WABridge)
     WABRIDGE_URL: str = os.getenv("WABRIDGE_URL", "http://localhost:8088")

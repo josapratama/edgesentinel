@@ -1,4 +1,5 @@
 import asyncio
+import collections
 import json
 import logging
 import os
@@ -10,7 +11,7 @@ import cv2
 import numpy as np
 from sqlalchemy import select
 
-from app.core.config import settings, SNAPSHOTS_DIR
+from app.core.config import settings, SNAPSHOTS_DIR, RECORDINGS_DIR
 from app.core.database import AsyncSessionLocal
 from app.models.entities import Camera, SecurityEvent
 from app.services.detector import detector, generate_synthetic_cctv_frame, DetectionResult
@@ -28,6 +29,15 @@ class ActiveCameraWorker:
         self.fps_limit = camera_data.get("fps_limit", 5.0)
         self.detection_enabled = camera_data.get("detection_enabled", True)
 
+        # Parse ROI Polygon (Virtual Tripwire)
+        self.roi_polygon = None
+        roi_raw = camera_data.get("roi_polygon_json")
+        if roi_raw:
+            try:
+                self.roi_polygon = json.loads(roi_raw)
+            except Exception:
+                self.roi_polygon = None
+
         self.is_running = False
         self.latest_frame: np.ndarray | None = None
         self.latest_detections: list[DetectionResult] = []
@@ -38,6 +48,15 @@ class ActiveCameraWorker:
         self.last_real_frame: np.ndarray | None = None
         self.consecutive_read_failures = 0
         self.last_event_time = 0.0
+
+        # Diagnostics & Health State
+        is_demo = self.stream_url.startswith("demo://") or not self.stream_url.strip()
+        self.connection_status = "fallback_demo" if is_demo else "authenticating"
+        self.error_message: str | None = None
+        self.resolution: str | None = "640x360" if is_demo else None
+
+        # Pre-alarm frame ring buffer for 10-second MP4 event video clips
+        self.frame_buffer = collections.deque(maxlen=40)
 
     async def start(self):
         self.is_running = True
@@ -69,11 +88,15 @@ class ActiveCameraWorker:
                 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;5000000"
                 self.cap = cv2.VideoCapture(self.stream_url, cv2.CAP_FFMPEG)
                 if not self.cap.isOpened():
-                    logger.warning(f"RTSP connect failed for {self.stream_url}, falling back to synthetic generator")
-                    is_demo = True
+                    logger.warning(f"RTSP connect failed for {self.stream_url}")
+                    self.connection_status = "auth_error"
+                    self.error_message = "Koneksi RTSP Gagal / Ditolak (401): Periksa password atau matikan enkripsi di Guarding Vision."
+                else:
+                    self.connection_status = "online"
             except Exception as e:
                 logger.error(f"Error opening camera {self.stream_url}: {e}")
-                is_demo = True
+                self.connection_status = "offline"
+                self.error_message = f"Gagal terhubung: {e}"
 
         last_time = time.time()
 
@@ -87,9 +110,19 @@ class ActiveCameraWorker:
                 if not is_demo and self.cap and self.cap.isOpened():
                     ret, captured = self.cap.read()
                     if ret and captured is not None and captured.size > 0:
-                        self.last_real_frame = captured
-                        frame = captured
-                        self.consecutive_read_failures = 0
+                        # Detect if frame is an encrypted 16x16 / 32x32 grey block from Hikvision Guarding Vision
+                        if captured.shape[0] <= 32 or captured.shape[1] <= 32:
+                            self.connection_status = "encrypted_error"
+                            self.error_message = "Enkripsi Stream Aktif: Matikan fitur 'Stream Encryption' di aplikasi Guarding Vision / DVR Hikvision."
+                            frame = generate_synthetic_cctv_frame(self.name, self.frame_counter)
+                        else:
+                            self.connection_status = "online"
+                            self.error_message = None
+                            self.resolution = f"{captured.shape[1]}x{captured.shape[0]}"
+                            self.last_real_frame = captured
+                            frame = captured
+                            self.consecutive_read_failures = 0
+                            self.frame_buffer.append(captured.copy())
                     else:
                         self.consecutive_read_failures += 1
                         if self.last_real_frame is not None:
@@ -109,20 +142,26 @@ class ActiveCameraWorker:
                             self.consecutive_read_failures = 0
                 else:
                     frame = generate_synthetic_cctv_frame(self.name, self.frame_counter)
+                    self.connection_status = "fallback_demo" if is_demo else "offline"
 
                 if frame is None:
                     await asyncio.sleep(0.1)
                     continue
 
-                # Resize if overly large to conserve Pi CPU
+                # Resize if overly large to conserve CPU
                 h, w = frame.shape[:2]
                 if w > 1280:
                     frame = cv2.resize(frame, (1280, int(h * (1280 / w))))
 
-                # 2. Run Vision Detection (if enabled)
+                # 2. Run Vision Detection (if enabled) with ROI filtering
                 detections: list[DetectionResult] = []
                 if self.detection_enabled:
-                    detections = detector.detect(frame, self.id, threshold=settings.CONFIDENCE_THRESHOLD)
+                    detections = detector.detect(
+                        frame,
+                        self.id,
+                        threshold=settings.CONFIDENCE_THRESHOLD,
+                        roi_polygon=self.roi_polygon
+                    )
                     self.latest_detections = detections
 
                     # Check if significant event should be saved
@@ -137,7 +176,13 @@ class ActiveCameraWorker:
                     self.current_fps = 0.9 * self.current_fps + 0.1 * (1.0 / elapsed)
                 last_time = time.time()
 
-                annotated = detector.draw_overlay(frame, detections, self.name, self.current_fps)
+                annotated = detector.draw_overlay(
+                    frame,
+                    detections,
+                    self.name,
+                    self.current_fps,
+                    roi_polygon=self.roi_polygon
+                )
                 self.latest_frame = annotated
 
                 # Rate limit target FPS
@@ -151,6 +196,45 @@ class ActiveCameraWorker:
                 logger.error(f"Error in camera loop '{self.name}': {e}")
                 await asyncio.sleep(0.2)
 
+    async def _record_video_clip(self, event_id: str, pre_frames: list[np.ndarray]):
+        """Records a 10-second MP4 video clip for this security event."""
+        try:
+            # Collect ~20 more post-alarm frames (~4-5 seconds)
+            post_frames = []
+            for _ in range(20):
+                await asyncio.sleep(0.2)
+                if self.latest_frame is not None:
+                    post_frames.append(self.latest_frame.copy())
+
+            all_frames = pre_frames + post_frames
+            if not all_frames:
+                return
+
+            video_filename = f"clip_{event_id}.mp4"
+            video_path = RECORDINGS_DIR / video_filename
+
+            h, w = all_frames[0].shape[:2]
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(str(video_path), fourcc, 6.0, (w, h))
+            for f in all_frames:
+                if f.shape[:2] == (h, w):
+                    out.write(f)
+            out.release()
+
+            # Update event in DB
+            video_url = f"/recordings/{video_filename}"
+            async with AsyncSessionLocal() as session:
+                stmt = select(SecurityEvent).where(SecurityEvent.id == event_id)
+                res = await session.execute(stmt)
+                evt = res.scalar_one_or_none()
+                if evt:
+                    evt.video_filename = video_filename
+                    evt.video_url = video_url
+                    await session.commit()
+            logger.info(f"Recorded 10s MP4 event video clip: {video_filename}")
+        except Exception as e:
+            logger.error(f"Error recording video clip for event {event_id}: {e}")
+
     async def _record_security_event(self, raw_frame: np.ndarray, detections: list[DetectionResult]):
         try:
             # Pick the highest confidence detection
@@ -160,11 +244,21 @@ class ActiveCameraWorker:
             filepath = SNAPSHOTS_DIR / filename
 
             # Draw bounding box on saved snapshot
-            snapshot_img = detector.draw_overlay(raw_frame, detections, self.name, self.current_fps)
+            snapshot_img = detector.draw_overlay(
+                raw_frame,
+                detections,
+                self.name,
+                self.current_fps,
+                roi_polygon=self.roi_polygon
+            )
             cv2.imwrite(str(filepath), snapshot_img)
 
             snapshot_url = f"/snapshots/{filename}"
             bbox_json = json.dumps([d.to_dict() for d in detections])
+
+            # Trigger background 10s MP4 video recording
+            pre_frames_copy = list(self.frame_buffer)
+            asyncio.create_task(self._record_video_clip(event_id, pre_frames_copy))
 
             # Persist to database
             async with AsyncSessionLocal() as session:
@@ -181,6 +275,8 @@ class ActiveCameraWorker:
                     confidence=best.confidence,
                     snapshot_filename=filename,
                     snapshot_url=snapshot_url,
+                    video_filename=None,
+                    video_url=None,
                     bbox_json=bbox_json,
                     notified_whatsapp=False,
                     created_at=datetime.now(timezone.utc)

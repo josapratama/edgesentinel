@@ -47,6 +47,19 @@ export default function App() {
     queryFn: api.getRules,
   })
 
+  const { data: armingData } = useQuery({
+    queryKey: ['arming-mode'],
+    queryFn: api.getArmingMode,
+    refetchInterval: 10000,
+  })
+
+  const setArmingMutation = useMutation({
+    mutationFn: api.setArmingMode,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['arming-mode'] })
+    },
+  })
+
   // Mutations
   const saveCameraMutation = useMutation({
     mutationFn: (data: Partial<Camera>) => {
@@ -138,6 +151,8 @@ export default function App() {
         }}
         onRefresh={handleManualRefresh}
         isRefreshing={isRefreshingCameras}
+        armingMode={armingData?.mode || 'always'}
+        onChangeArmingMode={(mode) => setArmingMutation.mutate(mode)}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6">

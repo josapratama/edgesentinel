@@ -20,6 +20,10 @@ class Camera(Base):
     detection_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     fps_limit: Mapped[float] = mapped_column(Float, default=5.0)
     status: Mapped[str] = mapped_column(String(20), default="online")  # "online", "offline", "error"
+    connection_status: Mapped[str] = mapped_column(String(30), default="online")  # "online", "authenticating", "auth_error", "encrypted_error", "offline", "fallback_demo"
+    error_message: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    resolution: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    roi_polygon_json: Mapped[str | None] = mapped_column(Text, nullable=True)  # "[[x1,y1],[x2,y2],...]" normalized
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
@@ -36,6 +40,8 @@ class SecurityEvent(Base):
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     snapshot_filename: Mapped[str] = mapped_column(String(200), nullable=False)
     snapshot_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    video_filename: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    video_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     bbox_json: Mapped[str] = mapped_column(Text, default="[]")  # "[x, y, w, h]" normalized
     notified_whatsapp: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

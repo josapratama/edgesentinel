@@ -10,32 +10,36 @@ from app.services.camera_manager import camera_manager
 router = APIRouter(prefix="/cameras", tags=["Cameras"])
 
 
+def _to_camera_response(cam: Camera) -> CameraResponse:
+    worker = camera_manager.workers.get(cam.id)
+    status_val = "online" if worker and worker.is_running else "offline"
+    conn_status = worker.connection_status if worker else (cam.connection_status or "offline")
+    err_msg = worker.error_message if worker else cam.error_message
+    res_val = worker.resolution if worker else cam.resolution
+    return CameraResponse(
+        id=cam.id,
+        name=cam.name,
+        location=cam.location,
+        stream_url=cam.stream_url,
+        is_active=cam.is_active,
+        detection_enabled=cam.detection_enabled,
+        fps_limit=cam.fps_limit,
+        status=status_val,
+        connection_status=conn_status,
+        error_message=err_msg,
+        resolution=res_val,
+        roi_polygon_json=cam.roi_polygon_json,
+        created_at=cam.created_at,
+        updated_at=cam.updated_at
+    )
+
+
 @router.get("", response_model=list[CameraResponse])
 async def list_cameras(db: AsyncSession = Depends(get_db)):
     stmt = select(Camera).order_by(Camera.created_at.asc())
     result = await db.execute(stmt)
     cameras = result.scalars().all()
-
-    # Update runtime status
-    res = []
-    for cam in cameras:
-        worker = camera_manager.workers.get(cam.id)
-        status_val = "online" if worker and worker.is_running else "offline"
-        res.append(
-            CameraResponse(
-                id=cam.id,
-                name=cam.name,
-                location=cam.location,
-                stream_url=cam.stream_url,
-                is_active=cam.is_active,
-                detection_enabled=cam.detection_enabled,
-                fps_limit=cam.fps_limit,
-                status=status_val,
-                created_at=cam.created_at,
-                updated_at=cam.updated_at
-            )
-        )
-    return res
+    return [_to_camera_response(cam) for cam in cameras]
 
 
 @router.post("", response_model=CameraResponse, status_code=status.HTTP_201_CREATED)
@@ -47,6 +51,7 @@ async def create_camera(payload: CameraCreate, db: AsyncSession = Depends(get_db
         is_active=payload.is_active,
         detection_enabled=payload.detection_enabled,
         fps_limit=payload.fps_limit,
+        roi_polygon_json=payload.roi_polygon_json,
         status="online"
     )
     db.add(camera)
@@ -56,7 +61,7 @@ async def create_camera(payload: CameraCreate, db: AsyncSession = Depends(get_db
     if camera.is_active:
         await camera_manager.start_camera(camera)
 
-    return camera
+    return _to_camera_response(camera)
 
 
 @router.get("/{camera_id}", response_model=CameraResponse)
@@ -67,9 +72,7 @@ async def get_camera(camera_id: str, db: AsyncSession = Depends(get_db)):
     if not cam:
         raise HTTPException(status_code=404, detail="Camera not found")
 
-    worker = camera_manager.workers.get(cam.id)
-    cam.status = "online" if worker and worker.is_running else "offline"
-    return cam
+    return _to_camera_response(cam)
 
 
 @router.put("/{camera_id}", response_model=CameraResponse)
@@ -92,7 +95,7 @@ async def update_camera(camera_id: str, payload: CameraUpdate, db: AsyncSession 
     else:
         await camera_manager.stop_camera(cam.id)
 
-    return cam
+    return _to_camera_response(cam)
 
 
 @router.delete("/{camera_id}", status_code=status.HTTP_204_NO_CONTENT)

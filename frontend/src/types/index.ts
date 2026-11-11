@@ -1,3 +1,11 @@
+export type ConnectionStatus =
+  | 'online'
+  | 'offline'
+  | 'authenticating'
+  | 'auth_error'
+  | 'encrypted_error'
+  | 'fallback_demo'
+
 export interface Camera {
   id: string
   name: string
@@ -7,6 +15,10 @@ export interface Camera {
   detection_enabled: boolean
   fps_limit: number
   status: 'online' | 'offline' | 'error'
+  connection_status?: ConnectionStatus
+  error_message?: string | null
+  resolution?: string | null
+  roi_polygon_json?: string | null
   created_at: string
   updated_at: string
 }
@@ -19,6 +31,8 @@ export interface SecurityEvent {
   confidence: number
   snapshot_filename: string
   snapshot_url: string
+  video_filename?: string | null
+  video_url?: string | null
   bbox_json: string
   notified_whatsapp: boolean
   created_at: string
@@ -50,3 +64,28 @@ export interface SystemStats {
   total_events_today: number
   uptime_seconds: number
 }
+
+export interface DiscoveredChannel {
+  channel: number
+  name: string
+  sub_stream_url: string
+  main_stream_url: string
+}
+
+export interface DiscoveredDevice {
+  ip: string
+  device_type: string
+  is_hikvision: boolean
+  rtsp_port: number
+  sdk_port?: number | null
+  channels: DiscoveredChannel[]
+}
+
+export interface ScanResponse {
+  success: boolean
+  scanned_subnet: string
+  devices_found: number
+  devices: DiscoveredDevice[]
+}
+
+export type ArmingMode = 'always' | 'night_only' | 'disarmed'

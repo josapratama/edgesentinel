@@ -1,17 +1,28 @@
 import time
-from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, Depends
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException
 import psutil
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.entities import SecurityEvent
 from app.models.schemas import SystemStatsResponse
 from app.services.camera_manager import camera_manager
+from app.services.scanner import scan_lan_cctv
 
 router = APIRouter(prefix="/system", tags=["System"])
 START_TIME = time.time()
+
+
+class ArmingModePayload(BaseModel):
+    mode: str  # 'always' | 'night_only' | 'disarmed'
+
+
+class ScanRequestPayload(BaseModel):
+    subnet: str | None = None
 
 
 @router.get("/stats", response_model=SystemStatsResponse)
@@ -40,3 +51,37 @@ async def get_system_stats(db: AsyncSession = Depends(get_db)):
         uptime_seconds=round(time.time() - START_TIME, 1)
     )
 
+
+@router.get("/arming")
+async def get_arming_mode():
+    return {
+        "mode": settings.ARMING_MODE,
+        "description": {
+            "always": "Aktif 24 Jam (Deteksi & Notifikasi Selalu Hidup)",
+            "night_only": "Hanya Malam (21:00 - 05:00 WIB)",
+            "disarmed": "Nonaktif (Senyap / Tanpa Notifikasi)"
+        }.get(settings.ARMING_MODE, "Custom")
+    }
+
+
+@router.put("/arming")
+async def set_arming_mode(payload: ArmingModePayload):
+    if payload.mode not in ["always", "night_only", "disarmed"]:
+        raise HTTPException(status_code=400, detail="Mode tidak valid. Pilihan: always, night_only, disarmed")
+    settings.ARMING_MODE = payload.mode
+    return {
+        "mode": settings.ARMING_MODE,
+        "message": f"Mode keamanan berhasil diubah ke: {settings.ARMING_MODE}"
+    }
+
+
+@router.post("/scan-cameras")
+async def scan_cameras(payload: ScanRequestPayload | None = None):
+    subnet = payload.subnet if payload else None
+    devices = await scan_lan_cctv(subnet)
+    return {
+        "success": True,
+        "scanned_subnet": subnet or "auto-detected",
+        "devices_found": len(devices),
+        "devices": devices
+    }

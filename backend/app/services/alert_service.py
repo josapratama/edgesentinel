@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import httpx
 from sqlalchemy import select
 from app.core.config import settings
@@ -18,14 +18,28 @@ class AlertService:
         Evaluates a newly detected security event against active AlertRules.
         Triggers WhatsApp notification if rules match and cooldown expired.
         """
+        # 0. Global Arming Mode Check
+        arming = getattr(settings, "ARMING_MODE", "always")
+        if arming == "disarmed":
+            logger.info("Security alert suppressed: System is DISARMED.")
+            return
+
+        now = datetime.now(timezone.utc)
+        # Convert to WIB (UTC+7) for local night check
+        wib_hour = (now + timedelta(hours=7)).hour
+
+        if arming == "night_only":
+            # Only trigger between 21:00 (9 PM) and 05:00 (5 AM)
+            is_night = (wib_hour >= 21 or wib_hour < 5)
+            if not is_night:
+                logger.info(f"Security alert suppressed: Night-only mode active (Current WIB hour: {wib_hour}).")
+                return
+
         async with AsyncSessionLocal() as session:
             # Query active rules matching this camera or all cameras
             stmt = select(AlertRule).where(AlertRule.is_active.is_(True))
             result = await session.execute(stmt)
             rules = result.scalars().all()
-
-            now = datetime.now(timezone.utc)
-            current_hour = now.hour
 
             for rule in rules:
                 # 1. Camera check
@@ -41,12 +55,12 @@ class AlertService:
                 if event.confidence < rule.min_confidence:
                     continue
 
-                # 4. Active hours check
+                # 4. Active hours check (rule-specific)
                 if rule.start_hour <= rule.end_hour:
-                    if not (rule.start_hour <= current_hour <= rule.end_hour):
+                    if not (rule.start_hour <= wib_hour <= rule.end_hour):
                         continue
                 else:  # Overnight range, e.g., 22:00 to 05:00
-                    if not (current_hour >= rule.start_hour or current_hour <= rule.end_hour):
+                    if not (wib_hour >= rule.start_hour or wib_hour <= rule.end_hour):
                         continue
 
                 # 5. Cooldown check
@@ -66,7 +80,6 @@ class AlertService:
 
                 if success:
                     self.cooldown_tracker[cooldown_key] = current_epoch
-                    # Update rule and event in DB
                     rule.last_triggered_at = now
                     # Mark event as notified
                     stmt_evt = select(SecurityEvent).where(SecurityEvent.id == event.id)
@@ -82,13 +95,19 @@ class AlertService:
         if not phone:
             return False
 
+        public_base = settings.PUBLIC_URL.rstrip("/")
+        snapshot_url = f"{public_base}{event.snapshot_url}" if event.snapshot_url else ""
+        live_url = f"{public_base}/"
+        local_time_str = (event.created_at + timedelta(hours=7)).strftime("%d-%m-%Y %H:%M:%S WIB")
+
         message = (
             f"🚨 *[EdgeSentinel AI Alert]*\n\n"
             f"📹 *Kamera:* {camera.name} ({camera.location})\n"
             f"🔍 *Objek Terdeteksi:* {event.object_class.upper()} (Akurasi: {int(event.confidence * 100)}%)\n"
-            f"⏰ *Waktu:* {event.created_at.strftime('%d-%m-%Y %H:%M:%S UTC')}\n"
+            f"⏰ *Waktu:* {local_time_str}\n"
             f"🎯 *Peraturan:* {rule.name}\n\n"
-            f"Periksa live stream dan snapshot di dashboard EdgeSentinel."
+            f"📸 *Snapshot Foto:* {snapshot_url}\n"
+            f"📡 *Live Pantau CCTV:* {live_url}"
         )
 
         try:
@@ -97,6 +116,7 @@ class AlertService:
                 payload = {
                     "phone": phone,
                     "message": message,
+                    "media_url": snapshot_url if snapshot_url else None
                 }
                 res = await client.post(target_url, json=payload)
                 if res.status_code in (200, 201):
@@ -111,4 +131,3 @@ class AlertService:
 
 
 alert_service = AlertService()
-

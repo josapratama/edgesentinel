@@ -1,5 +1,5 @@
-import { Shield, Eye, Bell, Video, Cpu, HardDrive, RefreshCw } from 'lucide-react'
-import type { SystemStats } from '../types'
+import { Shield, Eye, Bell, Video, Cpu, HardDrive, RefreshCw, Moon, BellOff, ShieldAlert } from 'lucide-react'
+import type { SystemStats, ArmingMode } from '../types'
 import { formatUptime } from '../lib/utils'
 
 interface NavbarProps {
@@ -9,6 +9,8 @@ interface NavbarProps {
   onAddCamera: () => void
   onRefresh: () => void
   isRefreshing?: boolean
+  armingMode: ArmingMode
+  onChangeArmingMode: (mode: ArmingMode) => void
 }
 
 export function Navbar({
@@ -18,6 +20,8 @@ export function Navbar({
   onAddCamera,
   onRefresh,
   isRefreshing,
+  armingMode,
+  onChangeArmingMode,
 }: NavbarProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/85 backdrop-blur-md px-4 py-3">
@@ -33,7 +37,7 @@ export function Navbar({
                 EdgeSentinel
               </span>
               <span className="rounded-full bg-cyan-950 px-2 py-0.5 text-[10px] font-semibold text-cyan-400 border border-cyan-800/60">
-                AI NVR v1.0
+                AI NVR v1.2
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
@@ -42,26 +46,68 @@ export function Navbar({
           </div>
         </div>
 
-        {/* System telemetry pills */}
-        {stats && (
-          <div className="hidden lg:flex items-center gap-2 text-xs">
-            <div className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/70 px-2.5 py-1 text-slate-300">
-              <Cpu className="h-3.5 w-3.5 text-cyan-400" />
-              <span>CPU: {stats.cpu_percent.toFixed(0)}%</span>
-            </div>
-            <div className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/70 px-2.5 py-1 text-slate-300">
-              <HardDrive className="h-3.5 w-3.5 text-indigo-400" />
-              <span>RAM: {stats.memory_percent.toFixed(0)}%</span>
-            </div>
-            <div className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/70 px-2.5 py-1 text-slate-300">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>{stats.active_cameras} Cams Live</span>
-            </div>
-            <div className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/70 px-2.5 py-1 text-slate-400">
-              <span>Up: {formatUptime(stats.uptime_seconds)}</span>
-            </div>
+        {/* System telemetry pills & Arming Mode */}
+        <div className="hidden lg:flex items-center gap-2 text-xs">
+          {/* Arming Mode Selector Pill */}
+          <div className="flex items-center rounded-xl border border-slate-800 bg-slate-900/90 p-1">
+            <button
+              onClick={() => onChangeArmingMode('always')}
+              title="Aktif 24 Jam: Notifikasi WhatsApp selalu menyala saat ada objek mencurigakan"
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                armingMode === 'always'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <ShieldAlert className="h-3 w-3" />
+              <span>24 Jam</span>
+            </button>
+            <button
+              onClick={() => onChangeArmingMode('night_only')}
+              title="Hanya Malam (21:00 - 05:00 WIB)"
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                armingMode === 'night_only'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Moon className="h-3 w-3" />
+              <span>Malam</span>
+            </button>
+            <button
+              onClick={() => onChangeArmingMode('disarmed')}
+              title="Disarmed (Senyap / Tanpa Notifikasi WA)"
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                armingMode === 'disarmed'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <BellOff className="h-3 w-3" />
+              <span>Senyap</span>
+            </button>
           </div>
-        )}
+
+          {stats && (
+            <>
+              <div className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/70 px-2.5 py-1 text-slate-300">
+                <Cpu className="h-3.5 w-3.5 text-cyan-400" />
+                <span>CPU: {stats.cpu_percent.toFixed(0)}%</span>
+              </div>
+              <div className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/70 px-2.5 py-1 text-slate-300">
+                <HardDrive className="h-3.5 w-3.5 text-indigo-400" />
+                <span>RAM: {stats.memory_percent.toFixed(0)}%</span>
+              </div>
+              <div className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/70 px-2.5 py-1 text-slate-300">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>{stats.active_cameras} Cams</span>
+              </div>
+              <div className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/70 px-2.5 py-1 text-slate-400">
+                <span>Up: {formatUptime(stats.uptime_seconds)}</span>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Navigation Actions */}
         <div className="flex items-center gap-2">
@@ -131,4 +177,3 @@ export function Navbar({
     </header>
   )
 }
-

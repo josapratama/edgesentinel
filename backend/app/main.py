@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.core.config import settings, SNAPSHOTS_DIR
+from app.core.config import settings, SNAPSHOTS_DIR, RECORDINGS_DIR
 from app.core.database import init_db
 from app.services.camera_manager import camera_manager
 from app.api import cameras, events, rules, streams, system
@@ -47,8 +47,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static file serving for snapshots
+# Static file serving for snapshots & recordings
 app.mount("/snapshots", StaticFiles(directory=str(SNAPSHOTS_DIR)), name="snapshots")
+app.mount("/recordings", StaticFiles(directory=str(RECORDINGS_DIR)), name="recordings")
 
 # Mount API Routers
 app.include_router(cameras.router, prefix="/api")

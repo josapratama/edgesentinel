@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Trash2, ExternalLink, CheckCircle2, XCircle, Search, Filter } from 'lucide-react'
+import { Trash2, ExternalLink, CheckCircle2, XCircle, Search, Filter, Play, Film } from 'lucide-react'
 import type { SecurityEvent, Camera } from '../types'
 import { formatDateTime } from '../lib/utils'
 
@@ -13,6 +13,7 @@ export function EventsView({ events, cameras, onDeleteEvent }: EventsViewProps) 
   const [selectedCamera, setSelectedCamera] = useState<string>('')
   const [selectedClass, setSelectedClass] = useState<string>('')
   const [previewImage, setPreviewImage] = useState<string | null>(null)
+  const [playingVideo, setPlayingVideo] = useState<string | null>(null)
 
   const filteredEvents = events.filter((e) => {
     if (selectedCamera && e.camera_id !== selectedCamera) return false
@@ -81,27 +82,53 @@ export function EventsView({ events, cameras, onDeleteEvent }: EventsViewProps) 
               {/* Snapshot thumbnail */}
               <div
                 className="relative aspect-video w-full overflow-hidden bg-slate-950 cursor-pointer"
-                onClick={() => setPreviewImage(evt.snapshot_url)}
+                onClick={() => {
+                  if (evt.video_url) {
+                    setPlayingVideo(evt.video_url)
+                  } else {
+                    setPreviewImage(evt.snapshot_url)
+                  }
+                }}
               >
                 <img
                   src={evt.snapshot_url}
                   alt={evt.object_class}
                   className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                 />
-                <div className="absolute top-2 left-2 rounded-md bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white uppercase backdrop-blur-md border border-white/10">
-                  {evt.object_class} ({int(evt.confidence * 100)}%)
-                </div>
-                {evt.notified_whatsapp ? (
-                  <div className="absolute top-2 right-2 flex items-center gap-1 rounded-md bg-emerald-950/80 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 border border-emerald-800/60 backdrop-blur-md">
-                    <CheckCircle2 className="h-3 w-3" />
-                    <span>WA Sent</span>
-                  </div>
-                ) : (
-                  <div className="absolute top-2 right-2 flex items-center gap-1 rounded-md bg-slate-900/80 px-2 py-0.5 text-[10px] font-medium text-slate-400 border border-slate-700 backdrop-blur-md">
-                    <XCircle className="h-3 w-3" />
-                    <span>Logged</span>
+
+                {/* Video Play Button Overlay if video exists */}
+                {evt.video_url && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/10 transition-colors">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-cyan-600/90 text-white shadow-lg backdrop-blur-xs group-hover:scale-110 transition-transform">
+                      <Play className="h-5 w-5 fill-white ml-0.5" />
+                    </div>
                   </div>
                 )}
+
+                <div className="absolute top-2 left-2 rounded-md bg-black/75 px-2 py-0.5 text-[10px] font-bold text-white uppercase backdrop-blur-md border border-white/10">
+                  {evt.object_class} ({int(evt.confidence * 100)}%)
+                </div>
+
+                <div className="absolute top-2 right-2 flex items-center gap-1">
+                  {evt.video_url && (
+                    <div className="flex items-center gap-0.5 rounded-md bg-blue-950/80 px-1.5 py-0.5 text-[9px] font-semibold text-blue-300 border border-blue-800/60 backdrop-blur-md">
+                      <Film className="h-2.5 w-2.5" />
+                      <span>10s MP4</span>
+                    </div>
+                  )}
+
+                  {evt.notified_whatsapp ? (
+                    <div className="flex items-center gap-1 rounded-md bg-emerald-950/80 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 border border-emerald-800/60 backdrop-blur-md">
+                      <CheckCircle2 className="h-3 w-3" />
+                      <span>WA</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 rounded-md bg-slate-900/80 px-2 py-0.5 text-[10px] font-medium text-slate-400 border border-slate-700 backdrop-blur-md">
+                      <XCircle className="h-3 w-3" />
+                      <span>Log</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Event Details */}
@@ -116,12 +143,22 @@ export function EventsView({ events, cameras, onDeleteEvent }: EventsViewProps) 
                 </div>
 
                 <div className="flex items-center justify-between border-t border-slate-800/60 pt-3 mt-3">
-                  <button
-                    onClick={() => setPreviewImage(evt.snapshot_url)}
-                    className="flex items-center gap-1 text-[11px] font-medium text-cyan-400 hover:text-cyan-300 transition-colors"
-                  >
-                    <ExternalLink className="h-3 w-3" /> Lihat Snapshot
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setPreviewImage(evt.snapshot_url)}
+                      className="flex items-center gap-1 text-[11px] font-medium text-cyan-400 hover:text-cyan-300 transition-colors"
+                    >
+                      <ExternalLink className="h-3 w-3" /> Foto
+                    </button>
+                    {evt.video_url && (
+                      <button
+                        onClick={() => setPlayingVideo(evt.video_url!)}
+                        className="flex items-center gap-1 text-[11px] font-medium text-blue-400 hover:text-blue-300 transition-colors"
+                      >
+                        <Play className="h-3 w-3" /> Klip
+                      </button>
+                    )}
+                  </div>
                   <button
                     onClick={() => onDeleteEvent(evt.id)}
                     title="Hapus kejadian"
@@ -157,6 +194,52 @@ export function EventsView({ events, cameras, onDeleteEvent }: EventsViewProps) 
           </div>
         </div>
       )}
+
+      {/* Video Clip Playback Modal */}
+      {playingVideo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+          onClick={() => setPlayingVideo(null)}
+        >
+          <div
+            className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl p-4 flex flex-col gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Film className="h-4 w-4 text-cyan-400" />
+                <h3 className="text-xs font-bold text-white">Pemutaran Rekaman Kejadian (10s MP4)</h3>
+              </div>
+              <button
+                onClick={() => setPlayingVideo(null)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black flex items-center justify-center">
+              <video
+                src={playingVideo}
+                controls
+                autoPlay
+                className="w-full h-full object-contain"
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+              <span>Durasi: ~10 Detik (Pre-buffer + Post-event)</span>
+              <a
+                href={playingVideo}
+                download
+                className="text-cyan-400 hover:underline flex items-center gap-1"
+              >
+                Unduh Rekaman MP4
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -164,4 +247,3 @@ export function EventsView({ events, cameras, onDeleteEvent }: EventsViewProps) 
 function int(val: number): number {
   return Math.round(val)
 }
-

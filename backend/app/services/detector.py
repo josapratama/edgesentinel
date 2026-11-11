@@ -30,7 +30,13 @@ class EdgeDetector:
         self.classes = ["person", "car", "motorcycle", "package", "dog"]
         self.prev_frames = {}
 
-    def detect(self, frame: np.ndarray, camera_id: str, threshold: float = 0.45) -> list[DetectionResult]:
+    def detect(
+        self,
+        frame: np.ndarray,
+        camera_id: str,
+        threshold: float = 0.45,
+        roi_polygon: list[list[float]] | None = None
+    ) -> list[DetectionResult]:
         results: list[DetectionResult] = []
         try:
             h, w = frame.shape[:2]
@@ -72,6 +78,16 @@ class EdgeDetector:
                     else:
                         label = "person"
 
+                    # Check ROI Filter (Tripwire / Perimeter Zone)
+                    center_x = x + cw / 2
+                    center_y = y + ch / 2
+                    if roi_polygon and len(roi_polygon) >= 3:
+                        poly_pts = np.array([[int(p[0] * w), int(p[1] * h)] for p in roi_polygon], dtype=np.int32)
+                        inside = cv2.pointPolygonTest(poly_pts, (float(center_x), float(center_y)), False) >= 0
+                        if not inside:
+                            # Ignored because object is outside the protected ROI zone
+                            continue
+
                     results.append(DetectionResult(label, conf, (x, y, x + cw, y + ch)))
         except Exception as e:
             logger.error(f"Detector error on camera {camera_id}: {e}")
@@ -83,10 +99,28 @@ class EdgeDetector:
         frame: np.ndarray,
         detections: list[DetectionResult],
         camera_name: str,
-        fps: float = 0.0
+        fps: float = 0.0,
+        roi_polygon: list[list[float]] | None = None
     ) -> np.ndarray:
         out = frame.copy()
         h, w = out.shape[:2]
+
+        # Draw ROI Polygon if configured
+        if roi_polygon and len(roi_polygon) >= 3:
+            poly_pts = np.array([[int(p[0] * w), int(p[1] * h)] for p in roi_polygon], dtype=np.int32)
+            breached = len(detections) > 0
+            roi_color = (0, 0, 230) if breached else (255, 200, 0)
+            
+            # Semi-transparent overlay fill
+            overlay = out.copy()
+            cv2.fillPoly(overlay, [poly_pts], (0, 0, 180) if breached else (180, 120, 0))
+            cv2.addWeighted(overlay, 0.22, out, 0.78, 0, out)
+            
+            # Boundary line
+            cv2.polylines(out, [poly_pts], isClosed=True, color=roi_color, thickness=2, lineType=cv2.LINE_AA)
+            tag_pos = poly_pts[0]
+            tag_text = "⚠️ ZONA SIAGA TEROBOS!" if breached else "🛡️ ZONA SIAGA (ROI)"
+            cv2.putText(out, tag_text, (tag_pos[0] + 5, tag_pos[1] - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.45, roi_color, 1, cv2.LINE_AA)
 
         # Header bar (CCTV HUD style)
         cv2.rectangle(out, (0, 0), (w, 36), (15, 23, 42), -1)
