@@ -1,4 +1,4 @@
-﻿# EdgeSentinel Quick Start (Windows)
+# EdgeSentinel Quick Start (Windows)
 Write-Host "=========================================" -ForegroundColor Cyan
 Write-Host "   EdgeSentinel AI NVR & Security Hub    " -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Cyan
@@ -12,3 +12,4 @@ if (Get-Command docker-compose -ErrorAction SilentlyContinue) {
 } else {
     Write-Host "Docker tidak ditemukan. Silakan jalankan backend dan frontend manual." -ForegroundColor Red
 }
+

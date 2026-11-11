@@ -106,3 +106,4 @@ Periksa live stream dan snapshot di dashboard EdgeSentinel.
 
 ## 📄 Lisensi
 MIT License © 2026 EdgeSentinel Project.
+
