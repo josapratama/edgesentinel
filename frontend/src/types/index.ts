@@ -20,6 +20,7 @@ export interface Camera {
   resolution?: string | null
   roi_polygon_json?: string | null
   exclusion_zones_json?: string | null
+  tripwire_direction?: 'both' | 'inbound' | 'outbound'
   created_at: string
   updated_at: string
 }
@@ -35,6 +36,9 @@ export interface SecurityEvent {
   video_filename?: string | null
   video_url?: string | null
   is_loitering?: boolean
+  familiar_face?: string | null
+  is_stranger?: boolean
+  license_plate?: string | null
   bbox_json: string
   notified_whatsapp: boolean
   created_at: string
@@ -50,8 +54,17 @@ export interface AlertRule {
   end_hour: number
   whatsapp_number: string
   cooldown_seconds: number
+  webhook_url?: string | null
   is_active: boolean
   last_triggered_at: string | null
+  created_at: string
+}
+
+export interface KnownFace {
+  id: string
+  name: string
+  relation: string
+  photo_url: string
   created_at: string
 }
 

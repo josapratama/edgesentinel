@@ -40,9 +40,14 @@ async def init_db():
             ("cameras", "resolution", "VARCHAR(30)"),
             ("cameras", "roi_polygon_json", "TEXT"),
             ("cameras", "exclusion_zones_json", "TEXT"),
+            ("cameras", "tripwire_direction", "VARCHAR(20) DEFAULT 'both'"),
             ("security_events", "video_filename", "VARCHAR(255)"),
             ("security_events", "video_url", "VARCHAR(500)"),
             ("security_events", "is_loitering", "BOOLEAN DEFAULT 0"),
+            ("security_events", "familiar_face", "VARCHAR(100)"),
+            ("security_events", "is_stranger", "BOOLEAN DEFAULT 0"),
+            ("security_events", "license_plate", "VARCHAR(50)"),
+            ("alert_rules", "webhook_url", "VARCHAR(500)"),
         ]
         for table, col, col_type in columns_to_ensure:
             try:

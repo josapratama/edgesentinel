@@ -22,6 +22,7 @@ export function CameraModal({ isOpen, onClose, onSave, initialData }: CameraModa
   const [detectionEnabled, setDetectionEnabled] = useState(true)
   const [roiPolygonJson, setRoiPolygonJson] = useState('')
   const [exclusionZonesJson, setExclusionZonesJson] = useState('')
+  const [tripwireDirection, setTripwireDirection] = useState<'both' | 'inbound' | 'outbound'>('both')
   const [drawnPoints, setDrawnPoints] = useState<Array<[number, number]>>([])
   const [saving, setSaving] = useState(false)
 
@@ -34,6 +35,7 @@ export function CameraModal({ isOpen, onClose, onSave, initialData }: CameraModa
       setDetectionEnabled(initialData.detection_enabled)
       setRoiPolygonJson(initialData.roi_polygon_json || '')
       setExclusionZonesJson(initialData.exclusion_zones_json || '')
+      setTripwireDirection(initialData.tripwire_direction || 'both')
       try {
         if (initialData.roi_polygon_json) {
           setDrawnPoints(JSON.parse(initialData.roi_polygon_json))
@@ -51,6 +53,7 @@ export function CameraModal({ isOpen, onClose, onSave, initialData }: CameraModa
       setDetectionEnabled(true)
       setRoiPolygonJson('')
       setExclusionZonesJson('')
+      setTripwireDirection('both')
       setDrawnPoints([])
     }
     setActiveTab('form')
@@ -81,6 +84,7 @@ export function CameraModal({ isOpen, onClose, onSave, initialData }: CameraModa
         detection_enabled: detectionEnabled,
         roi_polygon_json: roiPolygonJson.trim() || null,
         exclusion_zones_json: exclusionZonesJson.trim() || null,
+        tripwire_direction: tripwireDirection,
       })
       onClose()
     } finally {
@@ -192,6 +196,8 @@ export function CameraModal({ isOpen, onClose, onSave, initialData }: CameraModa
             drawnPoints={drawnPoints}
             setDrawnPoints={setDrawnPoints}
             setRoiPolygonJson={setRoiPolygonJson}
+            tripwireDirection={tripwireDirection}
+            setTripwireDirection={setTripwireDirection}
             onDone={() => setActiveTab('form')}
           />
         )}

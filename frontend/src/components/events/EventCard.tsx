@@ -53,10 +53,29 @@ export function EventCard({
         )}
 
         {/* Top Left Badges */}
-        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 z-10">
+        <div className="absolute top-2.5 left-2.5 flex flex-wrap items-center gap-1.5 z-10 max-w-[70%]">
           <Badge variant={isLoitering ? 'rose' : 'cyan'}>
             {event.object_class.toUpperCase()} ({Math.round(event.confidence * 100)}%)
           </Badge>
+
+          {event.familiar_face && (
+            <span className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2 py-0.5 text-[9px] font-extrabold text-white shadow-md">
+              <span>👤 {event.familiar_face}</span>
+            </span>
+          )}
+
+          {event.is_stranger && (
+            <span className="flex items-center gap-1 rounded-lg bg-rose-600 px-2 py-0.5 text-[9px] font-extrabold text-white shadow-md animate-pulse">
+              <span>🚨 Orang Asing</span>
+            </span>
+          )}
+
+          {event.license_plate && (
+            <span className="flex items-center gap-1 rounded-lg bg-amber-500 text-slate-950 font-black px-2 py-0.5 text-[9px] shadow-md tracking-wider">
+              <span>🚗 {event.license_plate}</span>
+            </span>
+          )}
+
           {isLoitering && (
             <span className="flex items-center gap-1 rounded-lg bg-rose-600 px-2 py-0.5 text-[9px] font-extrabold text-white shadow-md animate-pulse">
               <AlertTriangle className="h-2.5 w-2.5" />

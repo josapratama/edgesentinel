@@ -17,6 +17,7 @@ export function RuleModal({ isOpen, onClose, onSave, initialData }: RuleModalPro
   const [endHour, setEndHour] = useState(23)
   const [whatsappNumber, setWhatsappNumber] = useState('6281234567890')
   const [cooldownSeconds, setCooldownSeconds] = useState(60)
+  const [webhookUrl, setWebhookUrl] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export function RuleModal({ isOpen, onClose, onSave, initialData }: RuleModalPro
       setEndHour(initialData.end_hour)
       setWhatsappNumber(initialData.whatsapp_number)
       setCooldownSeconds(initialData.cooldown_seconds)
+      setWebhookUrl(initialData.webhook_url || '')
     } else {
       setName('Peringatan Orang Malam Hari')
       setObjectClasses('person')
@@ -36,6 +38,7 @@ export function RuleModal({ isOpen, onClose, onSave, initialData }: RuleModalPro
       setEndHour(5)
       setWhatsappNumber('6281234567890')
       setCooldownSeconds(60)
+      setWebhookUrl('')
     }
   }, [initialData, isOpen])
 
@@ -53,6 +56,7 @@ export function RuleModal({ isOpen, onClose, onSave, initialData }: RuleModalPro
         end_hour: Number(endHour),
         whatsapp_number: whatsappNumber.trim(),
         cooldown_seconds: Number(cooldownSeconds),
+        webhook_url: webhookUrl.trim() || null,
         is_active: true,
       })
       onClose()
@@ -166,6 +170,22 @@ export function RuleModal({ isOpen, onClose, onSave, initialData }: RuleModalPro
               onChange={(e) => setCooldownSeconds(Number(e.target.value))}
               className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-cyan-500"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              Webhook Lampu Sorot / IoT Relay (Opsional)
+            </label>
+            <input
+              type="url"
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+              placeholder="Contoh: http://192.168.100.50/relay/0?turn=on"
+              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500"
+            />
+            <p className="text-[10px] text-slate-500 mt-0.5">
+              Otomatis mengirim sinyal HTTP untuk menyalakan lampu sorot saat aturan ini terpicu.
+            </p>
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">

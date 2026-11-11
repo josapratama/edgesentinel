@@ -7,6 +7,8 @@ import type { Camera, AlertRule } from './types'
 // Layout & Reusable components
 import { Header } from './components/layout/Header'
 import { MobileNav } from './components/layout/MobileNav'
+import { PinLockScreen } from './components/auth/PinLockScreen'
+import { KnownFacesModal } from './components/faces/KnownFacesModal'
 
 // Views & Modals
 import { CameraGrid } from './components/cameras/CameraGrid'
@@ -25,6 +27,8 @@ export default function App() {
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null)
   const [ruleModalOpen, setRuleModalOpen] = useState(false)
   const [selectedRule, setSelectedRule] = useState<AlertRule | null>(null)
+  const [facesModalOpen, setFacesModalOpen] = useState(false)
+  const [isLocked, setIsLocked] = useState(false)
 
   // Web Audio Siren Alert
   const [soundEnabled, setSoundEnabled] = useState(false)
@@ -170,6 +174,8 @@ export default function App() {
         onChangeArmingMode={(mode) => setArmingMutation.mutate(mode)}
         soundAlarm={soundEnabled}
         onToggleSound={() => setSoundEnabled(!soundEnabled)}
+        onOpenFaces={() => setFacesModalOpen(true)}
+        onLock={() => setIsLocked(true)}
       />
 
       {/* Main Content Area */}
@@ -251,6 +257,16 @@ export default function App() {
           await saveRuleMutation.mutateAsync(data)
         }}
       />
+
+      <KnownFacesModal
+        isOpen={facesModalOpen}
+        onClose={() => setFacesModalOpen(false)}
+      />
+
+      {/* Security PIN Lockscreen if locked */}
+      {isLocked && (
+        <PinLockScreen onUnlocked={() => setIsLocked(false)} />
+      )}
     </div>
   )
 }

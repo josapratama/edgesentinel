@@ -1,4 +1,4 @@
-import { Shield, Eye, Bell, Video, Volume2, VolumeX, Plus } from 'lucide-react'
+import { Shield, Eye, Bell, Video, Volume2, VolumeX, Plus, UserCheck, Lock } from 'lucide-react'
 import type { ArmingMode } from '../../types'
 import { ArmingSelector } from './ArmingSelector'
 
@@ -10,6 +10,8 @@ interface HeaderProps {
   onChangeArmingMode: (mode: ArmingMode) => void
   soundAlarm?: boolean
   onToggleSound?: () => void
+  onOpenFaces?: () => void
+  onLock?: () => void
 }
 
 export function Header({
@@ -20,6 +22,8 @@ export function Header({
   onChangeArmingMode,
   soundAlarm,
   onToggleSound,
+  onOpenFaces,
+  onLock,
 }: HeaderProps) {
   const tabs = [
     { id: 'grid', label: 'Live CCTV', icon: Eye },
@@ -74,6 +78,18 @@ export function Header({
           {/* Arming Mode Dropdown */}
           <ArmingSelector mode={armingMode} onChange={onChangeArmingMode} variant="dropdown" />
 
+          {/* Known Faces Whitelist Button */}
+          {onOpenFaces && (
+            <button
+              onClick={onOpenFaces}
+              title="Kelola Wajah Dikenal (Keluarga vs Orang Asing)"
+              className="flex h-8 items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/80 px-2.5 text-xs font-semibold text-slate-300 hover:text-white hover:border-slate-700 transition-colors"
+            >
+              <UserCheck className="h-3.5 w-3.5 text-cyan-400" />
+              <span className="hidden lg:inline text-[11px]">Wajah AI</span>
+            </button>
+          )}
+
           {/* Siren Sound Alarm Toggle */}
           {onToggleSound && (
             <button
@@ -86,6 +102,17 @@ export function Header({
               }`}
             >
               {soundAlarm ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </button>
+          )}
+
+          {/* Lock Dashboard Screen Button */}
+          {onLock && (
+            <button
+              onClick={onLock}
+              title="Kunci Layar Dashboard (Kunci PIN)"
+              className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 transition-colors"
+            >
+              <Lock className="h-3.5 w-3.5" />
             </button>
           )}
 

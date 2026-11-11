@@ -1,6 +1,6 @@
 import time
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 import psutil
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -121,3 +121,38 @@ async def test_telegram_connection():
     from app.services.telegram_service import telegram_service
     success, msg = await telegram_service.test_connection()
     return {"success": success, "message": msg}
+
+
+@router.post("/intercom/broadcast")
+async def broadcast_intercom(audio: UploadFile = File(...)):
+    """Receives voice audio recording from web browser and broadcasts to Raspberry Pi speaker."""
+    import shutil
+    import subprocess
+    from pathlib import Path
+    from app.services.siren_service import SIREN_DIR
+
+    SIREN_DIR.mkdir(parents=True, exist_ok=True)
+    temp_path = SIREN_DIR / "intercom_voice.webm"
+
+    try:
+        with open(temp_path, "wb") as f:
+            shutil.copyfileobj(audio.file, f)
+
+        player = None
+        for p in ["ffplay", "aplay", "paplay"]:
+            if shutil.which(p):
+                player = p
+                break
+
+        if player == "ffplay":
+            subprocess.Popen(["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", str(temp_path)])
+        elif player in ["aplay", "paplay"]:
+            subprocess.Popen([player, str(temp_path)])
+
+        return {
+            "success": True,
+            "bytes_received": temp_path.stat().st_size,
+            "message": "Pesan suara berhasil disiarkan ke speaker rumah!"
+        }
+    except Exception as e:
+        return {"success": False, "message": f"Gagal menyiarkan audio: {e}"}

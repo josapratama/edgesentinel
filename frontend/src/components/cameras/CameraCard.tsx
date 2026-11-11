@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { Maximize2, Shield, ShieldOff, Settings, AlertTriangle, Lock, KeyRound, MapPin, Gauge } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Maximize2, Shield, ShieldOff, Settings, AlertTriangle, Lock, KeyRound, MapPin, Gauge, Mic } from 'lucide-react'
 import type { Camera } from '../../types'
 import { Badge } from '../ui/Badge'
+import { api } from '../../lib/api'
 
 interface CameraCardProps {
   camera: Camera
@@ -12,12 +13,57 @@ interface CameraCardProps {
 export function CameraCard({ camera, onEdit, onToggleDetection }: CameraCardProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [hasError, setHasError] = useState(false)
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false)
+  const [voiceFeedback, setVoiceFeedback] = useState<string | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
 
   const streamSrc = `/api/streams/${camera.id}/live?t=${camera.updated_at}`
   const connStatus = camera.connection_status || (camera.is_active ? 'online' : 'offline')
   const isEncrypted = connStatus === 'encrypted_error'
   const isAuthError = connStatus === 'auth_error'
   const isDemo = connStatus === 'fallback_demo' || camera.stream_url.startsWith('demo://')
+
+  const handleStartIntercom = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream)
+      mediaRecorderRef.current = mr
+      audioChunksRef.current = []
+
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data)
+      }
+
+      mr.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        stream.getTracks().forEach((track) => track.stop())
+        if (audioBlob.size > 100) {
+          setVoiceFeedback('Menyiarkan...')
+          try {
+            await api.broadcastIntercom(audioBlob)
+            setVoiceFeedback('Suara tersiar! 🔊')
+            setTimeout(() => setVoiceFeedback(null), 3000)
+          } catch {
+            setVoiceFeedback('Gagal mengirim suara')
+            setTimeout(() => setVoiceFeedback(null), 3000)
+          }
+        }
+      }
+
+      mr.start()
+      setIsRecordingVoice(true)
+    } catch {
+      alert('Izin mikrofon diperlukan untuk fitur Push-to-Talk Intercom.')
+    }
+  }
+
+  const handleStopIntercom = () => {
+    if (mediaRecorderRef.current && isRecordingVoice) {
+      mediaRecorderRef.current.stop()
+      setIsRecordingVoice(false)
+    }
+  }
 
   return (
     <div
@@ -150,12 +196,32 @@ export function CameraCard({ camera, onEdit, onToggleDetection }: CameraCardProp
           </div>
         </div>
 
-        <button
-          onClick={() => onEdit(camera)}
-          className="rounded-xl border border-slate-700/80 bg-slate-900/80 px-3 py-1.5 text-[11px] font-semibold text-cyan-400 hover:bg-slate-800 hover:text-cyan-300 transition-all shadow-xs"
-        >
-          Konfigurasi
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Push-to-Talk Intercom Button */}
+          <button
+            type="button"
+            onMouseDown={handleStartIntercom}
+            onMouseUp={handleStopIntercom}
+            onTouchStart={handleStartIntercom}
+            onTouchEnd={handleStopIntercom}
+            title="Tahan tombol untuk bicara ke speaker rumah"
+            className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold transition-all ${
+              isRecordingVoice
+                ? 'bg-rose-600 text-white animate-pulse shadow-md shadow-rose-950/80 scale-105'
+                : 'border border-slate-700/80 bg-slate-900/80 text-cyan-400 hover:bg-slate-800 hover:text-cyan-300'
+            }`}
+          >
+            <Mic className="h-3.5 w-3.5" />
+            <span className="text-[11px]">{isRecordingVoice ? 'Merekam...' : voiceFeedback || 'Bicara'}</span>
+          </button>
+
+          <button
+            onClick={() => onEdit(camera)}
+            className="rounded-xl border border-slate-700/80 bg-slate-900/80 px-3 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition-all shadow-xs"
+          >
+            Konfigurasi
+          </button>
+        </div>
       </div>
     </div>
   )

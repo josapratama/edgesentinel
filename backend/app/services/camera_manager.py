@@ -13,9 +13,11 @@ from sqlalchemy import select
 
 from app.core.config import settings, SNAPSHOTS_DIR, RECORDINGS_DIR
 from app.core.database import AsyncSessionLocal
-from app.models.entities import Camera, SecurityEvent
+from app.models.entities import Camera, SecurityEvent, KnownFace
 from app.services.detector import detector, generate_synthetic_cctv_frame, DetectionResult
 from app.services.alert_service import alert_service
+from app.services.face_service import face_service
+from app.services.alpr_service import alpr_service
 
 logger = logging.getLogger("edgesentinel.camera")
 
@@ -66,6 +68,8 @@ class ActiveCameraWorker:
                 self.exclusion_zones = json.loads(ex_raw)
             except Exception:
                 self.exclusion_zones = None
+
+        self.tripwire_direction = camera_data.get("tripwire_direction", "both")
 
         self.is_running = False
         self.latest_frame: np.ndarray | None = None
@@ -197,7 +201,8 @@ class ActiveCameraWorker:
                         self.id,
                         threshold=settings.CONFIDENCE_THRESHOLD,
                         roi_polygon=self.roi_polygon,
-                        exclusion_zones=self.exclusion_zones
+                        exclusion_zones=self.exclusion_zones,
+                        tripwire_direction=self.tripwire_direction
                     )
                     self.latest_detections = detections
 
@@ -298,6 +303,28 @@ class ActiveCameraWorker:
             pre_frames_copy = list(self.frame_buffer)
             asyncio.create_task(self._record_video_clip(event_id, pre_frames_copy))
 
+            # Advanced Vision: Face Recognition & ALPR License Plate extraction
+            familiar_face: str | None = None
+            is_stranger: bool = False
+            license_plate: str | None = None
+
+            if best.label == "person":
+                async with AsyncSessionLocal() as session:
+                    faces_res = await session.execute(select(KnownFace))
+                    known_faces = faces_res.scalars().all()
+                    kf_list = []
+                    for kf in known_faces:
+                        try:
+                            kf_list.append({"name": kf.name, "features": json.loads(kf.features_json)})
+                        except Exception:
+                            pass
+                familiar_name, stranger_flag = face_service.identify_person_face(raw_frame, best.bbox, kf_list)
+                familiar_face = familiar_name
+                is_stranger = stranger_flag
+
+            elif best.label in ["car", "motorcycle"]:
+                license_plate = alpr_service.extract_license_plate(raw_frame, best.bbox, best.label)
+
             # Persist to database
             async with AsyncSessionLocal() as session:
                 cam_res = await session.execute(select(Camera).where(Camera.id == self.id))
@@ -316,6 +343,9 @@ class ActiveCameraWorker:
                     video_filename=None,
                     video_url=None,
                     is_loitering=best.is_loitering,
+                    familiar_face=familiar_face,
+                    is_stranger=is_stranger,
+                    license_plate=license_plate,
                     bbox_json=bbox_json,
                     notified_whatsapp=False,
                     created_at=datetime.now(timezone.utc)
@@ -394,6 +424,7 @@ class CameraManager:
             "detection_enabled": camera.detection_enabled,
             "roi_polygon_json": camera.roi_polygon_json,
             "exclusion_zones_json": camera.exclusion_zones_json,
+            "tripwire_direction": getattr(camera, "tripwire_direction", "both"),
         })
         self.workers[camera.id] = worker
         await worker.start()

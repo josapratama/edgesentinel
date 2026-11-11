@@ -11,7 +11,7 @@ from app.core.database import init_db
 from app.services.camera_manager import camera_manager
 from app.services.storage_cleaner import storage_cleaner
 from app.services.alert_service import alert_service
-from app.api import cameras, events, rules, streams, system, whatsapp_bot
+from app.api import cameras, events, rules, streams, system, whatsapp_bot, auth, faces
 
 logging.basicConfig(
     level=logging.INFO,
@@ -63,6 +63,8 @@ app.include_router(rules.router, prefix="/api")
 app.include_router(streams.router, prefix="/api")
 app.include_router(system.router, prefix="/api")
 app.include_router(whatsapp_bot.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
+app.include_router(faces.router, prefix="/api")
 
 
 @app.get("/api/health")

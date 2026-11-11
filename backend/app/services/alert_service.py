@@ -155,6 +155,11 @@ class AlertService:
                 if success:
                     self.cooldown_tracker[cooldown_key] = current_epoch
                     rule.last_triggered_at = now
+
+                    # Trigger Smart Home / Floodlight Webhook if configured
+                    if getattr(rule, "webhook_url", None):
+                        asyncio.create_task(self._trigger_webhook(rule.webhook_url, event, camera))
+
                     # Mark event as notified
                     stmt_evt = select(SecurityEvent).where(SecurityEvent.id == event.id)
                     evt_res = await session.execute(stmt_evt)
@@ -163,6 +168,22 @@ class AlertService:
                         db_event.notified_whatsapp = True
                     await session.commit()
                     break
+
+    async def _trigger_webhook(self, url: str, event: SecurityEvent, camera: Camera):
+        """Sends HTTP POST to smart home IoT device / floodlight relay."""
+        try:
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                payload = {
+                    "event": "motion_alert",
+                    "camera": camera.name,
+                    "object": event.object_class,
+                    "confidence": event.confidence,
+                    "time": datetime.now(timezone.utc).isoformat()
+                }
+                await client.post(url, json=payload)
+                logger.info(f"Smart home floodlight webhook fired successfully: {url}")
+        except Exception as e:
+            logger.warning(f"Failed to fire smart home webhook ({url}): {e}")
 
     async def _send_whatsapp_alert(self, rule: AlertRule, event: SecurityEvent, camera: Camera) -> bool:
         phone = rule.whatsapp_number.strip().replace("+", "").replace("-", "").replace(" ", "")
@@ -174,13 +195,26 @@ class AlertService:
         live_url = f"{public_base}/"
         local_time_str = (event.created_at + timedelta(hours=7)).strftime("%d-%m-%Y %H:%M:%S WIB")
 
-        alert_title = "⚠️ *[PERINGATAN LOITERING / MENGINTAI]*" if getattr(event, "is_loitering", False) else "🚨 *[EdgeSentinel AI Alert]*"
+        # Custom alert title based on Face Recognition / Loitering
+        if getattr(event, "familiar_face", None):
+            alert_title = f"🟢 *[WAJAH DIKENAL: {event.familiar_face.upper()}]*"
+        elif getattr(event, "is_stranger", False):
+            alert_title = "🚨 *[PERINGATAN: ORANG ASING TIDAK DIKENAL!]*"
+        elif getattr(event, "is_loitering", False):
+            alert_title = "⚠️ *[PERINGATAN LOITERING / MENGINTAI]*"
+        else:
+            alert_title = "🚨 *[EdgeSentinel AI Alert]*"
+
         loitering_warn = "\n⚠️ *PERINGATAN:* Objek mencurigakan terdeteksi berdiam diri >15 detik!\n" if getattr(event, "is_loitering", False) else ""
+        plate_info = f"🚗 *Plat Nomor:* {event.license_plate}\n" if getattr(event, "license_plate", None) else ""
+        face_info = f"👤 *Identitas Wajah:* {event.familiar_face}\n" if getattr(event, "familiar_face", None) else ""
 
         message = (
             f"{alert_title}\n\n"
             f"📹 *Kamera:* {camera.name} ({camera.location})\n"
             f"🔍 *Objek Terdeteksi:* {event.object_class.upper()} (Akurasi: {int(event.confidence * 100)}%)\n"
+            f"{face_info}"
+            f"{plate_info}"
             f"{loitering_warn}"
             f"⏰ *Waktu:* {local_time_str}\n"
             f"🎯 *Peraturan:* {rule.name}\n\n"

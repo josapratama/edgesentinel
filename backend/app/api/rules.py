@@ -26,6 +26,7 @@ async def create_alert_rule(payload: AlertRuleCreate, db: AsyncSession = Depends
         end_hour=payload.end_hour,
         whatsapp_number=payload.whatsapp_number,
         cooldown_seconds=payload.cooldown_seconds,
+        webhook_url=payload.webhook_url,
         is_active=payload.is_active
     )
     db.add(rule)

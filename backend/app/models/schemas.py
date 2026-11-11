@@ -12,6 +12,7 @@ class CameraCreate(BaseModel):
     fps_limit: float = Field(default=5.0, ge=1.0, le=30.0)
     roi_polygon_json: str | None = None
     exclusion_zones_json: str | None = None
+    tripwire_direction: str = "both"  # "both", "inbound", "outbound"
 
 
 class CameraUpdate(BaseModel):
@@ -23,6 +24,7 @@ class CameraUpdate(BaseModel):
     fps_limit: float | None = None
     roi_polygon_json: str | None = None
     exclusion_zones_json: str | None = None
+    tripwire_direction: str | None = None
 
 
 class CameraResponse(BaseModel):
@@ -39,6 +41,7 @@ class CameraResponse(BaseModel):
     resolution: str | None = None
     roi_polygon_json: str | None = None
     exclusion_zones_json: str | None = None
+    tripwire_direction: str = "both"
     created_at: datetime
     updated_at: datetime
 
@@ -58,6 +61,9 @@ class SecurityEventResponse(BaseModel):
     video_filename: str | None = None
     video_url: str | None = None
     is_loitering: bool = False
+    familiar_face: str | None = None
+    is_stranger: bool = False
+    license_plate: str | None = None
     bbox_json: str
     notified_whatsapp: bool
     created_at: datetime
@@ -76,6 +82,7 @@ class AlertRuleCreate(BaseModel):
     end_hour: int = Field(default=23, ge=0, le=23)
     whatsapp_number: str = Field(..., min_length=6, max_length=50)
     cooldown_seconds: int = Field(default=60, ge=10, le=3600)
+    webhook_url: str | None = None
     is_active: bool = True
 
 
@@ -88,6 +95,7 @@ class AlertRuleUpdate(BaseModel):
     end_hour: int | None = None
     whatsapp_number: str | None = None
     cooldown_seconds: int | None = None
+    webhook_url: str | None = None
     is_active: bool | None = None
 
 
@@ -101,12 +109,35 @@ class AlertRuleResponse(BaseModel):
     end_hour: int
     whatsapp_number: str
     cooldown_seconds: int
+    webhook_url: str | None = None
     is_active: bool
     last_triggered_at: datetime | None
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+# Known Face schema
+class KnownFaceResponse(BaseModel):
+    id: str
+    name: str
+    relation: str
+    photo_url: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# Auth schemas
+class PinVerifyPayload(BaseModel):
+    pin: str
+
+
+class PinChangePayload(BaseModel):
+    old_pin: str
+    new_pin: str
 
 
 # System stats schema

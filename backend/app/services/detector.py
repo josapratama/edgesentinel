@@ -94,7 +94,8 @@ class EdgeDetector:
         camera_id: str,
         threshold: float = 0.45,
         roi_polygon: list[list[float]] | None = None,
-        exclusion_zones: list[list[list[float]]] | None = None
+        exclusion_zones: list[list[list[float]]] | None = None,
+        tripwire_direction: str = "both"
     ) -> list[DetectionResult]:
         now = time.time()
         results: list[DetectionResult] = []
@@ -134,8 +135,10 @@ class EdgeDetector:
                     valid_results.append(det)
             results = valid_results
 
-        # 4. Filter by ROI Polygon (Virtual Tripwire)
+        # 4. Filter by ROI Polygon (Virtual Tripwire) & Direction
         filtered: list[DetectionResult] = []
+        tracks = self.tracker_records.get(camera_id, [])
+
         for det in results:
             x1, y1, x2, y2 = det.bbox
             center_x = (x1 + x2) / 2.0
@@ -146,6 +149,26 @@ class EdgeDetector:
                 inside = cv2.pointPolygonTest(poly_pts, (float(center_x), float(center_y)), False) >= 0
                 if not inside:
                     continue
+
+                # Directional check (Inbound vs Outbound)
+                if tripwire_direction in ["inbound", "outbound"]:
+                    # Find closest previous track
+                    closest_track = None
+                    min_dist = float("inf")
+                    for t in tracks:
+                        dist = math.hypot(center_x - t["cx"], center_y - t["cy"])
+                        if dist < min_dist and dist < 120.0:
+                            min_dist = dist
+                            closest_track = t
+
+                    if closest_track:
+                        dy = center_y - closest_track["cy"]
+                        # Inbound: moving downwards (+dy) into property
+                        if tripwire_direction == "inbound" and dy < -4.0:
+                            continue  # Moving outbound, ignore
+                        # Outbound: moving upwards (-dy) leaving property
+                        elif tripwire_direction == "outbound" and dy > 4.0:
+                            continue  # Moving inbound, ignore
 
             filtered.append(det)
 

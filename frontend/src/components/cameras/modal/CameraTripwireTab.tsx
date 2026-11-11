@@ -7,6 +7,8 @@ interface CameraTripwireTabProps {
   drawnPoints: Array<[number, number]>
   setDrawnPoints: (pts: Array<[number, number]>) => void
   setRoiPolygonJson: (json: string) => void
+  tripwireDirection: 'both' | 'inbound' | 'outbound'
+  setTripwireDirection: (dir: 'both' | 'inbound' | 'outbound') => void
   onDone: () => void
 }
 
@@ -15,6 +17,8 @@ export function CameraTripwireTab({
   drawnPoints,
   setDrawnPoints,
   setRoiPolygonJson,
+  tripwireDirection,
+  setTripwireDirection,
   onDone,
 }: CameraTripwireTabProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -143,8 +147,48 @@ export function CameraTripwireTab({
         />
       </div>
 
+      {/* Directional Tripwire Selector */}
+      <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-slate-800 bg-slate-950/70 text-xs">
+        <span className="font-semibold text-slate-300">Arah Deteksi Alarm:</span>
+        <div className="flex rounded-lg border border-slate-800 bg-slate-900 p-0.5">
+          <button
+            type="button"
+            onClick={() => setTripwireDirection('both')}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${
+              tripwireDirection === 'both'
+                ? 'bg-cyan-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Semua Arah ↔️
+          </button>
+          <button
+            type="button"
+            onClick={() => setTripwireDirection('inbound')}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${
+              tripwireDirection === 'inbound'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Masuk Saja ➡️
+          </button>
+          <button
+            type="button"
+            onClick={() => setTripwireDirection('outbound')}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${
+              tripwireDirection === 'outbound'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Keluar Saja ⬅️
+          </button>
+        </div>
+      </div>
+
       <p className="text-[11px] text-slate-400">
-        💡 <b>Panduan:</b> Klik 3–5 titik di sekeliling area pagar atau lantai garasi. Area berwarna kuning transparan akan menjadi zona tripwire aktif.
+        💡 <b>Panduan:</b> Klik 3–5 titik di sekeliling area pagar atau lantai garasi. Pilih "Masuk Saja" jika hanya ingin alarm berbunyi saat ada orang menyeberang ke dalam halaman rumah.
       </p>
 
       <button
