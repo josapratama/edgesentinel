@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 from datetime import datetime, timezone
@@ -59,8 +60,9 @@ class ActiveCameraWorker:
 
         if not is_demo:
             try:
-                # Open RTSP / video capture with short timeout
-                self.cap = cv2.VideoCapture(self.stream_url)
+                # Open RTSP / video capture with TCP transport and 5s timeout
+                os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;5000000"
+                self.cap = cv2.VideoCapture(self.stream_url, cv2.CAP_FFMPEG)
                 if not self.cap.isOpened():
                     logger.warning(f"RTSP connect failed for {self.stream_url}, falling back to synthetic generator")
                     is_demo = True
