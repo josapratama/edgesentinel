@@ -84,3 +84,4 @@ async def change_pin(payload: PinChangePayload, db: AsyncSession = Depends(get_d
         "token": new_token,
         "message": "PIN Keamanan berhasil diperbarui!"
     }
+

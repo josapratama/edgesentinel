@@ -112,3 +112,4 @@ async def delete_face(face_id: str, db: AsyncSession = Depends(get_db)):
     await db.delete(face)
     await db.commit()
     return None
+

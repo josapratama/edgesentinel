@@ -122,3 +122,4 @@ class FaceRecognitionService:
 
 
 face_service = FaceRecognitionService()
+

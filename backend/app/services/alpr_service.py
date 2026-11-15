@@ -80,3 +80,4 @@ class ALPRService:
 
 
 alpr_service = ALPRService()
+

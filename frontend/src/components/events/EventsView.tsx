@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Filter, Search } from 'lucide-react'
+import { Filter, Search, FileSpreadsheet } from 'lucide-react'
 import type { SecurityEvent, Camera } from '../../types'
 import { EventTimeline } from './EventTimeline'
 import { EventCard } from './EventCard'
@@ -16,6 +16,7 @@ export function EventsView({ events, cameras, onDeleteEvent }: EventsViewProps) 
   const [selectedCamera, setSelectedCamera] = useState<string>('')
   const [selectedClass, setSelectedClass] = useState<string>('')
   const [selectedHour, setSelectedHour] = useState<number | null>(null)
+  const [searchQuery, setSearchQuery] = useState<string>('')
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [playingVideo, setPlayingVideo] = useState<string | null>(null)
 
@@ -45,8 +46,51 @@ export function EventsView({ events, cameras, onDeleteEvent }: EventsViewProps) 
         return false
       }
     }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      const matchClass = e.object_class.toLowerCase().includes(q)
+      const matchCam = (e.camera_name || cameras.find((c) => c.id === e.camera_id)?.name || '').toLowerCase().includes(q)
+      const matchPlate = (e.license_plate || '').toLowerCase().includes(q)
+      const matchFace = (e.familiar_face || '').toLowerCase().includes(q)
+      if (!matchClass && !matchCam && !matchPlate && !matchFace) return false
+    }
     return true
   })
+
+  const handleExportCSV = () => {
+    if (filteredEvents.length === 0) return
+
+    const headers = ['Event ID', 'Waktu', 'Kamera', 'Objek', 'Confidence (%)', 'Plat Nomor', 'Wajah / Persona', 'Snapshot File']
+    const rows = filteredEvents.map((evt) => {
+      const camName = evt.camera_name || cameras.find((c) => c.id === evt.camera_id)?.name || evt.camera_id
+      const conf = evt.confidence ? `${(evt.confidence * 100).toFixed(1)}%` : 'N/A'
+      const time = new Date(evt.created_at).toLocaleString('id-ID')
+      const plate = evt.license_plate || '-'
+      const face = evt.familiar_face ? `${evt.familiar_face} (Known)` : evt.is_stranger ? 'Stranger (Asing)' : '-'
+      return [
+        `"${evt.id}"`,
+        `"${time}"`,
+        `"${camName}"`,
+        `"${evt.object_class}"`,
+        `"${conf}"`,
+        `"${plate}"`,
+        `"${face}"`,
+        `"${evt.snapshot_filename || ''}"`
+      ].join(',')
+    })
+
+    const csvContent = [headers.join(','), ...rows].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const dateStr = new Date().toISOString().slice(0, 10)
+    link.href = url
+    link.setAttribute('download', `edgesentinel-events-${dateStr}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="space-y-6">
@@ -59,10 +103,21 @@ export function EventsView({ events, cameras, onDeleteEvent }: EventsViewProps) 
 
       {/* Filter Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-800/80 bg-slate-900/60 p-4 sm:p-5 backdrop-blur-md shadow-xl">
-        <div className="flex flex-wrap items-center gap-3 text-xs">
+        <div className="flex flex-wrap items-center gap-3 text-xs w-full lg:w-auto">
           <div className="flex items-center gap-1.5 text-slate-400 font-semibold">
             <Filter className="h-4 w-4 text-cyan-400" />
-            <span>Filter Kejadian:</span>
+            <span>Filter:</span>
+          </div>
+
+          <div className="relative min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cari objek / plat / kamera..."
+              className="w-full rounded-xl border border-slate-700 bg-slate-800/90 pl-8 pr-3 py-2 text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-cyan-500 font-medium"
+            />
           </div>
 
           <select
@@ -92,8 +147,21 @@ export function EventsView({ events, cameras, onDeleteEvent }: EventsViewProps) 
           </select>
         </div>
 
-        <div className="text-xs text-slate-400 font-semibold">
-          Menampilkan <strong className="text-white font-bold">{filteredEvents.length}</strong> kejadian
+        <div className="flex items-center gap-3 text-xs w-full lg:w-auto justify-between lg:justify-end">
+          <div className="text-slate-400 font-semibold">
+            Menampilkan <strong className="text-white font-bold">{filteredEvents.length}</strong> kejadian
+          </div>
+
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            disabled={filteredEvents.length === 0}
+            className="flex items-center gap-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3.5 py-2 font-bold text-cyan-400 hover:bg-cyan-500/20 disabled:opacity-40 transition-all cursor-pointer disabled:cursor-not-allowed"
+            title="Download CSV Audit Log"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            <span>Export CSV</span>
+          </button>
         </div>
       </div>
 
